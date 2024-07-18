@@ -4,6 +4,7 @@ import { createRoom, getRoom } from './room';
 import { IUserProject, createProject, deleteProject } from './projects';
 import { IUser, addUserRoom, getUserEmailIn } from './users';
 import sendFCMMessage from './sendFcm';
+import axios from 'axios';
 
 export const tasksCollection = collection(db, "tasks");
 
@@ -25,7 +26,13 @@ export interface ITaskData {
 }
 
 export const fetchTasks = async () => {
+    const res = await axios.get("/tasks")
+    return res.data;
     return getDocs(tasksCollection)
+}
+export const fetchindtasks = async (taskid: string) => {
+    const res = await axios.get(`/tasks/${taskid}`)
+    return res.data
 }
 
 interface ITaskCreateData {
@@ -53,7 +60,8 @@ export const createTask = async (data: ITaskCreateData) => {
         roomid,
         dueDate:  Timestamp.fromDate(data.dueDate)
     }
-    
+    const res= await axios.post("/tasks", taskData)
+    return res.data
     return addDoc(tasksCollection, taskData)
 }
 
@@ -69,10 +77,14 @@ export const editTask = async (taskid: string, data: ITaskCreateData) => {
     }
 
     console.log(taskData, taskid)
+    const res = await axios.put(`/tasks/${taskid}`, taskData)
+    return res.data
     return updateDoc(doc(tasksCollection, taskid), taskData)
 }
 
 export const deleteTask = async (taskid: string) => {
+    const res = await axios.delete(`/tasks/${taskid}`)
+    return res.data
     return deleteDoc(doc(tasksCollection, taskid))
 }
 
