@@ -369,7 +369,7 @@ const Tasks = () => {
                                                 <td className="border p-1">{u.title}</td>
                                                 <td className="border p-1">{u.type}</td>
                                                 <td className="border p-1">{u.dueDate.toDateString()}</td>
-                                                {/* <td className="border p-1 text-center">{u.mentors.length}</td> */}
+                                                {/* <td className="border p-1 text-center">{u.mentors.length}</td */}
                                                 <td className="border p-1 text-blue-500 overflow-hidden text-center"><a href={u.link} target="_blank">Link</a></td>
                                                 <td className="border p-1">
                                                     <button className="bg-yellow-500 text-white py-1 px-2 rounded-lg" onClick={() => taskEdit(u)}>Edit</button>
