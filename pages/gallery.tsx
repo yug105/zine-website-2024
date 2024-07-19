@@ -1,5 +1,7 @@
 import type { NextPage } from "next";
+import CreateNewBlog from "../components/Members/Admin/newblog";
 import Head from "next/head";
+import Edit from "../components/Members/Admin/editor";
 import {
   Gallery,
   Carousal
@@ -20,6 +22,8 @@ const GalleryImages: NextPage = () => {
       <ChatButton />
       <Carousal />
       <Gallery />
+      <CreateNewBlog />
+      {/* <Edit /> */}
       <SecFooter />
     </>
   );

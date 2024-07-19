@@ -13,6 +13,16 @@
     "static-build": "next build && next export"
   },
   "dependencies": {
+    "@editorjs/code": "^2.9.0",
+    "@editorjs/editorjs": "^2.30.2",
+    "@editorjs/embed": "^2.7.4",
+    "@editorjs/header": "^2.8.7",
+    "@editorjs/image": "^2.9.2",
+    "@editorjs/link": "^2.6.2",
+    "@editorjs/list": "^1.9.0",
+    "@editorjs/marker": "^1.4.0",
+    "@editorjs/quote": "^2.6.0",
+    "@editorjs/table": "^2.3.0",
     "@fortawesome/fontawesome-svg-core": "^6.1.1",
     "@fortawesome/free-brands-svg-icons": "^5.15.4",
     "@fortawesome/free-solid-svg-icons": "^6.1.1",
