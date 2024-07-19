@@ -26,9 +26,10 @@ export interface ITaskData {
 }
 
 export const fetchTasks = async () => {
-    const res = await axios.get("/tasks")
+    const res = await axios.get('http://localhost:8080/tasks')
+    console.log(res.data)
     return res.data;
-    return getDocs(tasksCollection)
+    // return getDocs(tasksCollection)
 }
 export const fetchindtasks = async (taskid: string) => {
     const res = await axios.get(`/tasks/${taskid}`)

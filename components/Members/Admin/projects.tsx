@@ -53,13 +53,13 @@ const Projects = () => {
     fetchTasks()
       .then((snapshots) => {
         const tasks: { [key: string]: ITaskData } = {};
-        snapshots.forEach((d) => {
+        snapshots.forEach((d: any) => {
           tasks[d.id] = d.data() as ITaskData;
         });
         return tasks;
       })
       .then((tasks) => {
-        // console.log(tasks);
+        console.log(tasks);
         getDocs(userTasksCollection).then((snapshots) => {
           snapshots.forEach(async (d) => {
             const userProject = d.data() as IUserProject;

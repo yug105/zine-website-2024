@@ -216,9 +216,10 @@ const Tasks = () => {
 
     useEffect(() => {
         fetchTasks().then(res => {
-            const tasks = res.docs.map(d => {
-                const { dueDate, ...data } = d.data()
-                return { id: d.id, dueDate: dueDate.toDate(), ...data } as ITaskData
+            console.log(res)
+            const tasks = res.map(d => {
+                const { dueDate, ...data } = d
+                return { id: d.id, dueDate: new Date(dueDate), ...data } as ITaskData
             })
             console.log(tasks)
             setTasks(() => tasks)
@@ -368,7 +369,7 @@ const Tasks = () => {
                                                 <td className="border p-1">{u.title}</td>
                                                 <td className="border p-1">{u.type}</td>
                                                 <td className="border p-1">{u.dueDate.toDateString()}</td>
-                                                <td className="border p-1 text-center">{u.mentors.length}</td>
+                                                {/* <td className="border p-1 text-center">{u.mentors.length}</td> */}
                                                 <td className="border p-1 text-blue-500 overflow-hidden text-center"><a href={u.link} target="_blank">Link</a></td>
                                                 <td className="border p-1">
                                                     <button className="bg-yellow-500 text-white py-1 px-2 rounded-lg" onClick={() => taskEdit(u)}>Edit</button>
