@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import EditorJS from "@editorjs/editorjs";
 import { getStorage,ref,uploadBytes, getDownloadURL } from "firebase/storage";
 // import CheckList from "@editorjs/checklist";
- import Code from "@editorjs/code";
+//  import Code from "@editorjs/code";
 // import Delimiter from "@editorjs/delimiter";
 import Embed from "@editorjs/embed";
 import Image from "@editorjs/image";
