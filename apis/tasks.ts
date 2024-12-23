@@ -1,119 +1,257 @@
-import { db } from '../firebase';
-import { collection, addDoc, getDoc, DocumentReference, Timestamp, updateDoc, doc, deleteDoc, getDocs, query, where } from "firebase/firestore";
-import { createRoom, getRoom } from './room';
-import { IUserProject, createProject, deleteProject } from './projects';
-import { IUser, addUserRoom, getUserEmailIn } from './users';
-import sendFCMMessage from './sendFcm';
+import axios from "../api/axios";
+import {IRoomData}  from "./room"
 
-export const tasksCollection = collection(db, "tasks");
+const taskURL = "/tasks"
+const roleURL = "/role"
+const userURL = "/user"
+const instanceURL = "/instance"
+const commentURL = "/comment"
 
 export interface ITaskData {
-    id: string;
-    title: string;
-    type: "Team" | "Individual";
-    link: "";
-    subheading: "";
-    description: string;
-    submissionLink: string;
-    dueDate: Date;
-    mentors: string[];
-    createRoom: boolean;
-    roomName?: string;
-    tags?: string[];
-    roles:string[];
-    available?: boolean;
+    id: number,
+    createdDate: number,
+    title: string,
+    subtitle: string,
+    description: string,
+    dueDate: number,
+    psLink: string|null,
+    submissionLink: string|null,
+    type: string,
+    recruitment: number|null,
+    visible: boolean    
 }
 
-export const fetchTasks = async () => {
-    return getDocs(tasksCollection)
+export interface ITaskInstanceData {
+    id: number,
+    type: string,
+    name: string,
+    status: string, 
+    completionPercentage: number,
+    task: ITaskData
+    roomId: number,
+    roomName: string
 }
 
-interface ITaskCreateData {
-    title: string;
-    type: 'Individual' | 'Team';
-    link: string;
-    subheading: string;
-    description: string;
-    submissionLink: string;
-    dueDate: Date;
-    mentors: string[];
-    createRoom: boolean;
-    roomName?: string; // if createRoom is true
-    roles?:string[];
-    available?: boolean;
+export interface ITaskInstanceCreateData {
+    type: string,
+    name: string,
+    dpUrl: string,
+    description: string,
+    status: string,
+    completionPercentage: number,
 }
 
-export const createTask = async (data: ITaskCreateData) => {
-    var roomid = null;
-    if (data.createRoom == false && data.roomName) roomid = getRoom(data.roomName)
+export interface ICheckpointData {
+    id: number,
+    remark: boolean,
+    content: string,
+    timestamp: number,
+    sentFrom: string
+    sentFromId: number,
+}
 
-    const taskData = {
-        ...data,
-        createdDate: Timestamp.fromDate(new Date()),
-        roomid,
-        dueDate:  Timestamp.fromDate(data.dueDate)
+export interface ICheckpointCreateData {
+    remark: boolean,
+    content: string,
+    sentFromId: number,
+}
+
+export interface ILinkData {
+    id: number,
+    type: string,
+    link: string,
+    timestamp: number
+    sentFrom: string,
+    sentFromId: number
+}
+
+export interface ILinkCreateData {
+    type: string,
+    link: string,
+    sentFromId: number
+}
+
+export interface ICommentCreateData {
+    message: string, 
+    senderId: number,
+}
+
+export interface ICommentData extends ICommentCreateData{
+    commentId: number;
+    taskInstance: number;
+    taskId: number;
+    senderEmail: string;
+    senderName: string;
+    timestamp: number;
+}
+
+export const getAssignedTaskInstances = async (jwt: string) => {
+    try{
+        const response = await axios.get(taskURL + "/user", 
+            {headers: {"Authorization": `Bearer ${jwt}`}});
+        if(response.status==200) {
+            let instances: ITaskInstanceData[] = response.data.instances;
+            return instances;
+        } else {
+            console.error("Error fetching assigned task instances", response.statusText);
+            return []
+        }
+    } catch(error) {
+        console.error("Error fetching assigned task instances", error);
+        return []
     }
-    
-    return addDoc(tasksCollection, taskData)
 }
 
-export const editTask = async (taskid: string, data: ITaskCreateData) => {
-    var roomid = null;
-    if (data.createRoom == false && data.roomName) roomid = getRoom(data.roomName)
-
-    const taskData = {
-        ...data,
-        createdDate: new Date(),
-        roomid,
-        dueDate:  data.dueDate
-    }
-
-    console.log(taskData, taskid)
-    return updateDoc(doc(tasksCollection, taskid), taskData)
-}
-
-export const deleteTask = async (taskid: string) => {
-    return deleteDoc(doc(tasksCollection, taskid))
-}
-
-const createTaskRoom = async (task: ITaskData, groups: IUser[][]) => {
-    const mentorSnapshot = await getUserEmailIn(task.mentors)
-    const mentors = mentorSnapshot.docs.map(d => d.data() as IUser)
-    console.log('mentors', mentors)
-
-    if (task.createRoom) {
-        // Create room automatically
-        return Promise.all(groups.map(async (g) => {
-            console.log('group', g)
-            const roomName = task.roomName || `${task.title.split(' ')[0]}-${g[0].email.slice(4).split('@')[0]}`
-            const room = await createRoom(roomName, [], "project", "", "")
-            const members = g.concat(mentors)
-    
-            await Promise.all(members.map(m => addUserRoom(m, [roomName], [room.id])))
-            return sendFCMMessage(roomName, `Project Room Created`, `Ask your doubts related to ${task.title} project to your mentors in this channel`)
-        }))
-    } else {
-        // Add user to already existing room
-        const room = await getRoom(task.roomName!)
-        return Promise.all(groups.map(async (g) => {
-            await Promise.all(g.map(async u => await addUserRoom(u, [task.roomName!], [room.docs[0].id])))
-        }))
+export const getRoleMappedTasks = async (jwt: string) => {
+    try{
+        const response = await axios.get(taskURL + "/user/mapped-tasks", 
+            {headers: {"Authorization": `Bearer ${jwt}`}});
+        if(response.status==200) {
+            let tasks: ITaskData[] = response.data.tasks;
+            return tasks;
+        } else {
+            console.error("Error fetching assigned tasks", response.statusText);
+            return []
+        }
+    } catch(error) {
+        console.error("Error fetching assigned tasks", error);
+        return []
     }
 }
 
-export const assignTask = async (task: ITaskData, users: IUser[]) => {
-    if (!users.length) return
-    if (task.type === 'Individual') {
-        const projects = await Promise.all(users.map(async u => await createProject(task.id, [u.uid])))
-        
-        // All in seperate groups
-        await createTaskRoom(task, users.map(u => [u]))
-        return projects
-    } else {
-        const projects = await createProject(task.id, users.map(u => u.uid))
-
-        // All in one group
-        await createTaskRoom(task, [users])
-        return projects
+export const getTasksByRole = async (roleID: string) => {
+    try {
+        const response = await axios.get(roleURL + `/${roleID}/task`);
+        if(response.status==200) {
+            let tasks: ITaskData[] = response.data.tasks;
+            return tasks;
+        } else {
+            console.error("Error fetching tasks by role", response.statusText);
+            return []
+        }
+    } catch(error) {
+        console.error("Error fetching tasks by role", error);
+        return []
     }
+}
+
+export const chooseTask = async (taskId: number, jwt: string, data: ITaskInstanceCreateData) => {
+    try {
+        const response = await axios.post(userURL + `/tasks/${taskId}/instance`, data, {headers: {"Authorization": `Bearer ${jwt}`}});
+        if(response.status==200) {
+            return response.data.instance as ITaskInstanceData;
+        } else {
+            console.error("Error fetching tasks by role", response.statusText);
+        }
+        return;
+    } catch(error) {
+        console.error("Error fetching tasks by role", error);
+        return;
+    }
+}
+
+export const fetchCheckpoints = async (instanceId: number) => {
+    try {
+        const response = await axios.get(instanceURL + `/${instanceId}/checkpoints`);
+        if(response.status == 200) {
+            let checkpoints: ICheckpointData[] = response.data.checkpoints;
+            return checkpoints;
+        } else {
+            console.error("Error fetching checkpoints", response.statusText);
+            return []
+        }
+    } catch(error) {
+        console.error("Error fetching checkpoints", error);
+        return [];
+    }
+}
+
+export const addCheckpoint = async (instanceId: number, data: ICheckpointCreateData) => {
+    try {
+        const response = await axios.post(instanceURL + `/${instanceId}/checkpoints`, data);
+        if(response.status == 200) {
+            let checkpoint: ICheckpointData = response.data.checkpoint;
+            return checkpoint;
+        } else {
+            console.error("Error sending checkpoint", response.statusText);
+            return;
+        }
+    } catch(error) {
+        console.error("Error sending checkpoint", error);
+        return;;
+    }
+}
+
+export const fetchLinks = async (instanceId: number) => {
+    try {
+        const response = await axios.get(instanceURL + `/${instanceId}/links`);
+        if(response.status == 200) {
+            let links: ILinkData[] = response.data.links;
+            return links;
+        } else {
+            console.error("Error fetching links", response.statusText);
+            return []
+        }
+    } catch(error) {
+        console.error("Error fetching links", error);
+        return [];
+    }
+}
+
+export const addLink = async (instanceId: number, data: ILinkCreateData) => {
+    try {
+        const response = await axios.post(instanceURL + `/${instanceId}/links`, data);
+        if(response.status == 200) {
+            let link: ILinkData = response.data.link;
+            return link;
+        } else {
+            console.error("Error sending link", response.statusText);
+            return;
+        }
+    } catch(error) {
+        console.error("Error sending link", error);
+        return;;
+    }
+}
+
+export const fetchComments = async (instanceId: number) => {
+    try {
+        const response = await axios.get(commentURL, {params: {instance: instanceId}} );
+        if(response.status == 200) {
+            return response.data.comments as ICommentData[];
+        } else {
+            console.error("Error fetching comments", response.statusText);
+            return;
+        }
+    } catch(error) {
+        console.error("Error fetching comments", error);
+        return;
+    }
+}
+
+export const postComment = async (instanceId: number, data: ICommentCreateData) => {
+    try {
+        const response = await axios.post(commentURL, data, {params: {instance: instanceId} } );
+        if(response.status == 200) {
+            // console.log(response);
+            
+            return response.data.comment as ICommentData;
+        } else {
+            console.error("Error posting comments", response.statusText);
+            return;
+        }
+    } catch(error) {
+        console.error("Error posting comments", error);
+        return;
+    }
+}
+
+export const monthDay = (timestamp: number) => {
+    let dataObj = new Date(timestamp);
+    return dataObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+export const hourMinute = (timestamp: number) => {
+    let dataObj = new Date(timestamp);
+    return dataObj.toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric" });
 }

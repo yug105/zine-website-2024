@@ -1,5 +1,5 @@
-import Projects from "./projects"
 import Announcements from "./announcements"
 import Channels from "./channels"
+import Projects from "./projects"
 
-export { Projects, Announcements, Channels }
+export { Announcements, Channels, Projects }

@@ -1,12 +1,10 @@
 import Dashboard from "./dashboard"
-import Registrations from "./registrations"
-import Users from "./users"
-import Tasks from "./tasks"
 import Events from "./events"
-import Announcements from "./announcements"
-import Projects from "./projects"
 import Rooms from "./rooms"
+import Channels from "./channels"
+import Tasks from "./tasks"
 import Roles from "./roles"
-import UserRoles from "./userRoles"
+import TaskInstances from "./taskInstances"
+import HackathonRegistration from "./hackathonRegistrations"
 
-export {Dashboard, Registrations, Users, Tasks, Events, Announcements, Projects, Rooms, Roles, UserRoles}
+export {Dashboard, Events, Rooms, Channels, Tasks, Roles, TaskInstances, HackathonRegistration }

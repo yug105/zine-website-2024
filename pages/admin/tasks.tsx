@@ -1,9 +1,8 @@
 import type { NextPage } from "next";
 import Head from "next/head";
-import {
-  Tasks,
-} from "../../components/Members/Admin";
 import { AuthContextProvider } from "../../context/authContext";
+import { Tasks } from "../../components/Members/Admin";
+
 
 const Home: NextPage = () => {
   return (

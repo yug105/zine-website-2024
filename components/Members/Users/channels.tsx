@@ -2,41 +2,14 @@ import React, { useEffect, useState, useRef } from "react";
 import ProtectedRoute from "./ProtectedRoute";
 import SideNav from "../sidenav";
 import { useAuth } from "../../../context/authContext";
-import { db } from "../../../firebase";
-import { collection, addDoc, getDocs, query, where, doc, limit, getDoc, DocumentReference, orderBy, onSnapshot } from "firebase/firestore";
-import { sendMessage, getMessages, announcementRoom } from "../../../apis/room";
-import sendFCMMessage from "../../../apis/sendFcm";
+import { getRoom, fetchRoomMessages, fetchRoomsByUser, IRoomData, IMessageData , updateLastSeen, lastSeen, ANNOUNCEMENT_ROOM_NEW_ID, getAnnouncementRoom} from "../../../apis/room";
 import Image from "next/image";
 import Send from "../../../images/icons/Send.png";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark, faLeftLong, faReply } from "@fortawesome/free-solid-svg-icons";
-import styled from "styled-components";
-interface ITimestamp {
-  seconds: number;
-  nanoseconds: number;
-}
+import SockJS from "sockjs-client";
+import { Stomp, Client } from "@stomp/stompjs";
 import ChatDP from "../../../images/admin/logo.png";
-interface IMessageData {
-  from: string;
-  group: string;
-  message: string;
-  replyTo: string;
-  timeStamp: ITimestamp;
-  sender_id: string;
-}
-const ImageWrap = styled.span`
-  margin-top: 5px;
-  box-sizing: content-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-
-  & > div {
-    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
-  }
-`;
 
 const Channels = () => {
   type KeyValueArray = Array<{
@@ -45,118 +18,142 @@ const Channels = () => {
   }>;
 
   const { authUser } = useAuth();
-  const [rooms, setRooms] = useState<any[]>([]);
-  const [currRoomID, setCurrRoomID] = useState<string>("");
+  const [rooms, setRooms] = useState<IRoomData[]>([]);
+  const [announcementRoom, setAnnouncementRoom] = useState<IRoomData>();
+  const [currRoomID, setCurrRoomID] = useState<number>();
   const [currRoom, setCurrRoom] = useState<string>("");
-  const [messages, setMessages] = useState<KeyValueArray>([]);
+  const [messages, setMessages] = useState<IMessageData[]>([]);
   const [currMsg, setCurrMsg] = useState("");
   const [replyText, setReplyText] = useState<string>("");
   const [replyingName, setReplyingName] = useState<string>("");
-  const [replyingMessageID, setReplyingMessageID] = useState<string | null>(null);
+  const [replyingMessageID, setReplyingMessageID] = useState<number | null>(null);
   const [currRoomImage, setCurrRoomImage] = useState<string>("");
   const lastMessageRef = useRef<HTMLDivElement | null>(null);
   const [screenWidth, setScreenWidth] = useState(window.innerWidth);
   const [hide, setHide] = useState(false);
-  const [announcements, setAnnouncements] = useState<IMessageData[]>([]);
+  const [stompClient, setStompClient] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [roomLastSeen, setRoomLastSeen] = useState<number>(0);
+
   const updateScreenWidth = () => {
     setScreenWidth(window.innerWidth);
   };
+
+  const onConnected = () => {
+    setIsConnected(true);
+  };
+
+  useEffect(() => {
+    if (currRoomID) {
+      stompClient;
+    }
+  }, []);
+
+  useEffect(() => {
+    let subscription: any; 
+    if (currRoomID && stompClient !== null) {
+      // console.log(currRoomID, "reached inside use effect");
+      
+      subscription = stompClient.subscribe("/room/" + currRoomID, (msg: any) => {
+        let body = JSON.parse(msg.body) as IMessageData;
+        setMessages(prev => [...prev, body]);
+        setRoomLastSeen(body.timestamp)
+        // console.log("revd msg", body);
+        
+      });
+    }
+  
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, [currRoomID]);
+  
+  const onError = (error: any) => {
+    // console.log(error);
+  };
+  const connect = () => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      const client = new Client({
+        webSocketFactory: () =>
+          new SockJS(process.env.NEXT_PUBLIC_API_URL+"/ws", null, {
+            withCredentionals: false,
+          }),
+        connectHeaders: { Authorization: `Bearer ${token}` },
+        debug: (str: any) => {
+          // console.log(str);
+        },
+        onConnect: onConnected,
+        onStompError: onError,
+        reconnectDelay: 10000,
+      });
+      client.activate();
+      setStompClient(client);
+    }
+  };
+  useEffect(() => {
+    connect();
+  }, []);
   useEffect(() => {
     window.addEventListener("resize", updateScreenWidth);
     return () => window.removeEventListener("resize", updateScreenWidth);
   }, []);
 
   useEffect(() => {
-    if (currRoomID) {
-      const roomRef = doc(db, "rooms", currRoomID);
-      const messagesRef = collection(roomRef, "messages");
-      const q = query(messagesRef, orderBy("timeStamp", "asc"));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const newMsg: KeyValueArray = [];
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === "added") {
-            // console.log(change.doc.data());
-            // console.log(change.doc.id);
-            newMsg.push({ id: change.doc.id, data: change.doc.data() as IMessageData });
-          }
-          // if (change.type === "modified") {
-          //   console.log("Modified", change.doc.data());
-          // }
-          // if (change.type === "removed") {
-          //   console.log("Removed", change.doc.data());
-          // }
-        });
-        // console.log("new docs", newMsg);
+    if(authUser?.email && currRoomID)
+      updateLastSeen(authUser?.email, currRoomID)
+  }, [roomLastSeen, currRoomID])
 
-        // console.log("new docs length", newMsg.length);
-
-        setMessages((oldMsg) => [...oldMsg, ...newMsg]);
-      });
-      return () => {
-        unsubscribe();
-      };
-    }
-  }, [currRoomID]);
-
-  const fetchRooms = async () => {
-    const promises = authUser?.roomids.map(async (roomID: string) => {
-      const roomRef = doc(db, "rooms", roomID);
-      const roomSnapshot = await getDoc(roomRef);
-      if (roomSnapshot.exists()) {
-        return [roomID, roomSnapshot.data()];
-      } else {
-        return [roomID, null];
-      }
-    });
-    const final = await Promise.all(promises);
-    // console.log("rooms", final);
-
-    // const IDValuePairs = Object.assign({}, ...final);
-    setRooms(final);
-  };
+  // to fetch the rooms once the component loads
   useEffect(() => {
-    fetchRooms();
+    if (authUser?.email) {
+      fetchRoomsByUser(authUser.email)
+        .then((res) => {
+          setRooms(res);
+          // console.log(res);
+
+        })
+        .catch((err) => {
+          // console.log(err);
+        });
+        getAnnouncementRoom(authUser.email).then((res) => {
+          setAnnouncementRoom(res);
+          // console.log(res); 
+
+        })
+    }
   }, []);
+
+  // useEffect(() => {
+  //   // console.log("rooms", rooms);
+    
+  // }, [rooms])
 
   useEffect(() => {
     if (lastMessageRef.current) {
       lastMessageRef.current!.scrollIntoView();
     }
   }, [messages]);
+
   const handleSend = async () => {
     if (!currMsg) return;
-    const roomCollection = collection(db, "rooms");
-    const roomDoc = doc(roomCollection, currRoomID);
-    const user = {
-      name: authUser?.name,
-      id: authUser?.uid,
+    const msgBody = {
+      type: "text",
+      content: currMsg.trim(),
+      sentFrom: authUser?.id,
+      roomId: currRoomID,
+      replyTo: replyingMessageID,
+      contentUrl: null,
     };
-    //console.log(user, currMsg,roomRef);
-    //console.log("user data", user);
-    //console.log("id", replyingMessageID);
-    const res = await sendMessage(roomDoc, currMsg, user, replyingMessageID);
-    await sendFCMMessage(currRoom, currRoom, currMsg);
-
-    //console.log(res);
-    //fetchSubCollectionMessages(roomDoc.id);
+    if (msgBody.sentFrom) {
+      stompClient.publish({ destination: "/app/message", headers: {}, body: JSON.stringify(msgBody) });
+    }
     setCurrMsg("");
     setReplyText("");
     setReplyingName("");
     setReplyingMessageID(null);
-    //console.log("message sent",res);
-  };
-  const timestampToHuman = (timeStamp: ITimestamp) => {
-    const date = new Date(timeStamp.seconds * 1000);
-    return {
-      date: date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
-      time: date.toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "numeric",
-      }),
-    };
   };
 
   const URL_REGEX = /^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$/gm;
@@ -174,7 +171,7 @@ const Channels = () => {
     user: boolean;
     space: boolean;
     name: string;
-    id: string;
+    id: number;
     text: string;
     disableStatus: boolean;
     mobile: boolean;
@@ -208,7 +205,7 @@ const Channels = () => {
       </div>
     );
   }
-  const GetRepliedText = ({ msgID, user, space }: { msgID: string; user: boolean; space: boolean }) => {
+  const GetRepliedText = ({ msgID, user, space }: { msgID: number; user: boolean; space: boolean }) => {
     const msg = messages?.find((item) => item.id === msgID);
     return (
       <div
@@ -217,7 +214,7 @@ const Channels = () => {
           marginLeft: `${user ? "auto" : space ? "2rem" : "0rem"}`,
         }}
       >
-        <div className={`text-sm ${user ? "ml-auto" : ""}`} style={{ color: "#8D989F" }}>{`Replying to ${msg?.data.from.split(" ")[0]}`}</div>
+        <div className={`text-sm ${user ? "ml-auto" : ""}`} style={{ color: "#8D989F" }}>{`Replying to ${msg?.sentFrom.name.split(" ")[0]}`}</div>
         <div className={`flex ${!user ? "flex" : ""}`}>
           {!user && (
             <div
@@ -227,8 +224,8 @@ const Channels = () => {
               }}
             ></div>
           )}
-          <div className={`bg-white w-4/5 text-sm px-6 py-3 ${user ? "ml-auto" : ""}`} style={{ borderRadius: `${user ? "20px 10px 10px 20px" : "10px 20px 20px 10px"}` }}>
-            {truncateString(msg?.data.message || "")}
+          <div className={`bg-white w-4/5 text-sm px-6 py-3 w-full flex-wrap ${user ? "ml-auto" : ""}`} style={{ borderRadius: `${user ? "20px 10px 10px 20px" : "10px 20px 20px 10px"}` }}>
+            {truncateString(msg?.content || "")}
           </div>
           {user && (
             <div
@@ -249,36 +246,71 @@ const Channels = () => {
     }
     return str?.substring(0, 50) + end;
   };
-  const displayReply = (id: string, name: string, text: string) => {
+  const displayReply = (id: number, name: string, text: string) => {
     setReplyingMessageID(id);
     setReplyingName(name);
     setReplyText(text);
   };
+
+  const displayRoomMessages = (id: number) => {
+    fetchRoomMessages(id).then((res) => {
+      // console.log(res);
+      setMessages(res);
+    });
+  };
+
+  const unixToHumanReadable = (timestamp: number) => {
+    let dataObj = new Date(timestamp);
+    return dataObj.toLocaleString();
+  }
+
+  useEffect(() => {
+    // console.log("messages", messages);
+  }, [messages]);
+useEffect(() => {
+  // console.log("curr room id", currRoomID);
+  
+}, [currRoomID])
+  const handleRoomChange = (room: IRoomData, mobile: boolean) => {
+    if(currRoomID !== null)
+      updateLastSeen(authUser?.email as string, room.id as number);
+    setCurrRoomID(room.id);
+    currRoomID !== room.id && setMessages([]);
+    displayRoomMessages(room.id)
+    setCurrRoom(room.name);
+    setCurrRoomImage(room.dpUrl);
+
+    lastSeen(authUser?.email as string, room.id).then((res) => {
+      setRoomLastSeen(res);
+    });
+    updateLastSeen(authUser?.email as string, room.id)
+
+    if(mobile)
+      setHide(true);
+    setReplyText("");
+    setReplyingName("");
+    setReplyingMessageID(null);
+  }
+
   return (
     <ProtectedRoute>
       <div className="flex flex-col md:grid grid-cols-12 h-screen w-screen font-poppins" style={{ background: "#EFEFEF" }}>
         <SideNav />
 
         {/* rooms/ channels */}
-
-        <div className="flex h-screen md:col-span-9">
+ 
+        <div className="flex h-screen md:col-span-9" style={{"display": isConnected? "": "none"}}>
           {screenWidth >= 768 ? (
             <div className="w-60 bg-white shrink-0 px-3 pt-10 flex justify-center overflow-y-auto">
               <div className="w-full">
-                <p
+                <div
                   onClick={() => {
-                    setCurrRoom("Announcements");
-                    currRoom !== "Announcements" && setMessages([]);
-                    // fetchSubCollectionMessages("Hn9GSQnvi5zh9wabLGuT");
-                    setCurrRoomID("Hn9GSQnvi5zh9wabLGuT");
-                    setReplyText("");
-                    setReplyingName("");
-                    setReplyingMessageID(null);
+                    handleRoomChange(announcementRoom as IRoomData, false);
                   }}
-                  className={`w-11/12 flex font-extrabold text-sm rounded-2xl mb-1 py-2 pl-4 ${currRoom === "Announcements" ? "bg-white" : "bg-gray-200"}`}
+                  className={`w-11/12 flex font-extrabold text-sm rounded-2xl mb-1 py-2 pl-4 ${currRoom === announcementRoom?.name ? "bg-white" : "bg-gray-200"}`}
                   style={{
                     color: "#003d63",
-                    border: `${currRoom === "Announcements" ? "1px solid #003d63" : ""}`,
+                    border: `${currRoom === announcementRoom?.name ? "1px solid #003d63" : ""}`,
                     cursor: "pointer",
                   }}
                 >
@@ -293,147 +325,188 @@ const Channels = () => {
                       <Image layout="responsive" src={ChatDP} />
                     </div>
                   </div>
-                  {"Announcements"}
-                </p>
-
-                <div className="font-normal ml-2 mt-5" style={{ color: "#8D989F" }}>
-                  Groups
+                    <div className="flex items-center">{announcementRoom?.name}</div>
+                    <div className="text-xs ml-auto pr-2 flex items-center">{announcementRoom?.unreadMessages!=0 ? announcementRoom?.unreadMessages : <></>}</div>
                 </div>
-                {rooms.map((ele) => {
-                  if (ele[1] === null) return; //if room does not exist
-                  return (
-                    ele[1].type === "group" && (
-                      <p
-                        onClick={() => {
-                          // console.log(ele[0]);
-                          currRoomID !== ele[0] && setMessages([]);
-                          setCurrRoomID(ele[0]);
-                          // fetchSubCollectionMessages(ele[0]);
-                          setCurrRoom(ele[1].name);
-                          setCurrRoomImage(ele[1].image);
-                          setReplyText("");
-                          setReplyingName("");
-                          setReplyingMessageID(null);
-                        }}
-                        key={ele}
-                        className={`w-11/12 flex font-extrabold rounded-2xl mb-1 py-2 pl-4 text-sm ${currRoom === ele[1].name ? "bg-white" : "bg-gray-200"}`}
-                        style={{
-                          color: "#003d63",
-                          border: `${currRoom === ele[1].name ? "1px solid #003d63" : ""}`,
-                          cursor: "pointer",
-                        }}
-                      >
+                {rooms.filter(room => room.type == 'workshop').length != 0 &&
+                  <div className="font-normal ml-2 mt-5" style={{ color: "#8D989F" }}>
+                    Workshops
+                  </div>}
+                {rooms &&
+                  rooms.map((ele) => {
+                    if (ele.id === null) return; //if room does not exist
+                    return (
+                      ele.type === "workshop" && (
                         <div
-                          className="w-6 h-6 mr-2 rounded-full"
+                          key={ele.id}
+                          onClick={() => {
+                            handleRoomChange(ele, false);
+                          }}
+                          className={`w-11/12 flex font-extrabold rounded-2xl mb-1 py-2 pl-4 text-sm ${currRoom === ele.name ? "bg-white" : "bg-gray-200"}`}
                           style={{
-                            backgroundColor: "white",
+                            color: "#003d63",
+                            border: `${currRoomID === ele.id ? "1px solid #003d63" : ""}`,
+                            cursor: "pointer",
                           }}
                         >
-                          {ele[1].image ? (
-                            <Image
-                              width={50}
-                              height={50}
-                              src={ele[1].image}
-                              className="rounded-full"
-                              style={{
-                                backgroundColor: "#0C72B0",
-                              }}
-                            />
-                          ) : (
-                            <div className="h-full w-full flex flex-col justify-center">
-                              <Image layout="responsive" src={ChatDP} />
-                            </div>
-                          )}
+                          <div
+                            className="w-6 h-6 z-4 mr-2"
+                            style={{
+                              backgroundColor: "white",
+                              borderRadius: "50%",
+                            }}
+                          >
+                            {ele.dpUrl ? (
+                              <div
+                                className="h-full w-full flex flex-col justify-center rounded-full relative"
+                                style={{
+                                  overflow: "hidden",
+                                  borderRadius: "50%",
+                                }}
+                              >
+                                <Image
+                                  width={50}
+                                  height={50}
+                                  src={ele.dpUrl}
+                                  className="rounded-full"
+                                  style={{
+                                    backgroundColor: "#0C72B0",
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="h-full w-full flex flex-col justify-center relative">
+                                <Image layout="responsive" objectFit="cover" src={ChatDP} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center">{ele.name}</div>
+                          <div className="text-xs ml-auto pr-2 text-xs ml-auto pr-5 flex items-center">{ele?.unreadMessages!=0 ? ele?.unreadMessages : <></>}</div>
                         </div>
-                        {ele[1].name}
-                      </p>
-                    )
-                  );
-                })}
-                <div className="font-normal ml-2 mt-5" style={{ color: "#8D989F" }}>
-                  Rooms
-                </div>
-                {rooms.map((ele) => {
-                  if (ele[1] === null) return; //if room does not exist
-                  return (
-                    ele[1].type === "project" && (
-                      <p
-                        key={ele}
-                        onClick={() => {
-                          // console.log(ele[0]);
-                          currRoomID !== ele[0] && setMessages([]);
-                          setCurrRoomID(ele[0]);
-                          // fetchSubCollectionMessages(ele[0]);
-                          setCurrRoom(ele[1].name);
-                          setCurrRoomImage(ele[1].image);
-                          setReplyText("");
-                          setReplyingName("");
-                          setReplyingMessageID(null);
-                        }}
-                        className={`w-11/12 flex font-extrabold rounded-2xl mb-1 py-2 pl-4 text-sm ${currRoom === ele[1].name ? "bg-white" : "bg-gray-200"}`}
-                        style={{
-                          color: "#003d63",
-                          border: `${currRoom === ele[1].name ? "1px solid #003d63" : ""}`,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div
-                          className="w-6 h-6 z-4 mr-2"
+                      )
+                    );
+                  })}
+                {rooms.filter(room => room.type == 'group').length != 0 &&
+                  <div className="font-normal ml-2 mt-5" style={{ color: "#8D989F" }}>
+                    Groups
+                  </div>}
+                {rooms &&
+                  rooms.map((ele) => {
+                    if (ele.id === null) return; //if room does not exist
+                    return (
+                      ele.type === "group" && (
+                        <p
+                          onClick={() => {
+                            handleRoomChange(ele, false);
+                          }}
+                          key={ele.name}
+                          className={`w-11/12 flex font-extrabold rounded-2xl mb-1 py-2 pl-4 text-sm ${currRoom === ele.name ? "bg-white" : "bg-gray-200"}`}
                           style={{
-                            backgroundColor: "white",
-                            borderRadius: "50%",
+                            color: "#003d63",
+                            border: `${currRoomID === ele.id ? "1px solid #003d63" : ""}`,
+                            cursor: "pointer",
                           }}
                         >
-                          {ele[1].image ? (
-                            <div
-                              className="h-full w-full flex flex-col justify-center rounded-full relative"
-                              style={{
-                                overflow: "hidden",
-                                borderRadius: "50%",
-                              }}
-                            >
+                          <div
+                            className="w-6 h-6 mr-2 rounded-full"
+                            style={{
+                              backgroundColor: "white",
+                            }}
+                          >
+                            {ele.dpUrl ? (
                               <Image
                                 width={50}
                                 height={50}
-                                src={ele[1].image}
+                                src={ele.dpUrl}
                                 className="rounded-full"
                                 style={{
                                   backgroundColor: "#0C72B0",
                                 }}
                               />
-                            </div>
-                          ) : (
-                            <div className="h-full w-full flex flex-col justify-center relative">
-                              <Image layout="responsive" objectFit="cover" src={ChatDP} />
-                            </div>
-                          )}
+                            ) : (
+                              <div className="h-full w-full flex flex-col justify-center">
+                                <Image layout="responsive" src={ChatDP} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center">{ele.name}</div>
+                          <div className="text-xs ml-auto pr-2 text-xs ml-auto pr-5 flex items-center">{ele?.unreadMessages!=0 ? ele?.unreadMessages : <></>}</div>
+                        </p>
+                      )
+                    );
+                  })}
+                {rooms.filter(room => room.type == 'project').length != 0 &&
+                  <div className="font-normal ml-2 mt-5" style={{ color: "#8D989F" }}>
+                    Projects
+                  </div>}
+                {rooms &&
+                  rooms.map((ele) => {
+                    if (ele.id === null) return; //if room does not exist
+                    return (
+                      ele.type === "project" && (
+                        <div
+                          key={ele.id}
+                          onClick={() => {
+                            handleRoomChange(ele, false);
+                          }}
+                          className={`w-11/12 flex font-extrabold rounded-2xl mb-1 py-2 pl-4 text-sm ${currRoom === ele.name ? "bg-white" : "bg-gray-200"}`}
+                          style={{
+                            color: "#003d63",
+                            border: `${currRoomID === ele.id ? "1px solid #003d63" : ""}`,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div
+                            className="w-6 h-6 z-4 mr-2"
+                            style={{
+                              backgroundColor: "white",
+                              borderRadius: "50%",
+                            }}
+                          >
+                            {ele.dpUrl ? (
+                              <div
+                                className="h-full w-full flex flex-col justify-center rounded-full relative"
+                                style={{
+                                  overflow: "hidden",
+                                  borderRadius: "50%",
+                                }}
+                              >
+                                <Image
+                                  width={50}
+                                  height={50}
+                                  src={ele.dpUrl}
+                                  className="rounded-full"
+                                  style={{
+                                    backgroundColor: "#0C72B0",
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="h-full w-full flex flex-col justify-center relative">
+                                <Image layout="responsive" objectFit="cover" src={ChatDP} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center">{ele.name}</div>
+                          <div className="text-xs ml-auto pr-2 text-xs ml-auto pr-5 flex items-center">{ele?.unreadMessages!=0 ? ele?.unreadMessages : <></>}</div>
                         </div>
-                        {ele[1].name}
-                      </p>
-                    )
-                  );
-                })}
+                      )
+                    );
+                  })}
               </div>
             </div>
           ) : (
             !hide && (
-              <div className="fixed bg-white h-full w-screen bottom-0 z-40 pt-20 justify-center overflow-y-auto pb-3">
+              <div className="fixed bg-white h-full w-screen bottom-0 z-40 pt-20 justify-center overflow-y-auto pb-3" style={{"display": isConnected? "": "none"}}>
                 <div className={`w-4/5 mx-auto`}>
-                  <p
+                  <div
                     onClick={() => {
-                      setCurrRoom("Announcements");
-                      currRoom !== "Announcements" && setMessages([]);
-                      // fetchSubCollectionMessages("Hn9GSQnvi5zh9wabLGuT");
-                      setCurrRoomID("Hn9GSQnvi5zh9wabLGuT");
-                      setReplyText("");
-                      setReplyingName("");
-                      setReplyingMessageID(null);
-                      setHide(true);
+                      handleRoomChange(announcementRoom as IRoomData, true);
                     }}
-                    className={`flex text-xl rounded-xl mb-1 py-2 pl-4 ${currRoom === "Announcements" ? "bg-white" : "bg-gray-200"}`}
+                    className={`flex text-xl rounded-xl mb-1 py-2 pl-4 ${currRoom === announcementRoom?.name ? "bg-white" : "bg-gray-200"}`}
                     style={{
                       color: "#003d63",
-                      border: `${currRoom === "Announcements" ? "1px solid #003d63" : ""}`,
+                      border: `${currRoom === announcementRoom?.name ? "1px solid #003d63" : ""}`,
                       cursor: "pointer",
                     }}
                   >
@@ -448,131 +521,170 @@ const Channels = () => {
                         <Image layout="responsive" src={ChatDP} />
                       </div>
                     </div>
-                    Announcements
-                  </p>
-
+                    {announcementRoom?.name}
+                    <div className="text-xs ml-auto pr-5 flex items-center">{announcementRoom?.unreadMessages!=0 ? `(${announcementRoom?.unreadMessages})` : <></>}</div>
+                  </div>
+                  <div className="font-normal w-3/5 mt-5" style={{ color: "#8D989F" }}>
+                    Workshops
+                  </div>
+                  {rooms &&
+                    rooms.map((ele) => {
+                      if (ele.id === null) return; //if room does not exist
+                      return (
+                        ele.type === "workshop" && (
+                          <p
+                            key={ele.id}
+                            onClick={() => {
+                              // console.log(ele.id);
+                              handleRoomChange(ele, true);
+                            }}
+                            className={`flex rounded-xl text-xl mb-2 py-2 pl-4 text-sm ${currRoom === ele.name ? "bg-white" : "bg-gray-200"}`}
+                            style={{
+                              color: "#003d63",
+                              border: `${currRoomID === ele.id ? "1px solid #003d63" : ""}`,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <div
+                              className="w-8 h-8 mr-4"
+                              style={{
+                                backgroundColor: "#fff",
+                                borderRadius: "50%",
+                              }}
+                            >
+                              {ele.dpUrl ? (
+                                <div className="h-full w-full flex flex-col justify-center">
+                                  <Image
+                                    height={50}
+                                    width={50}
+                                    src={ele.dpUrl}
+                                    className="rounded-full"
+                                    style={{
+                                      backgroundColor: "#0C72B0",
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-full w-full flex flex-col justify-center">
+                                  <Image layout="responsive" src={ChatDP} />
+                                </div>
+                              )}
+                            </div>
+                            {ele.name}
+                            <div className="text-xs ml-auto pr-5 flex items-center">{ele?.unreadMessages !== 0 ? `(${ele?.unreadMessages})` : <></>}</div>
+                          </p>
+                        )
+                      );
+                    })}
                   <div className="font-normal w-3/5 mt-5" style={{ color: "#8D989F" }}>
                     Groups
                   </div>
-                  {rooms.map((ele) => {
-                    if (ele[1] === null) return; //if room does not exist
-                    return (
-                      ele[1].type === "group" && (
-                        <p
-                          key={ele}
-                          onClick={() => {
-                            // console.log(ele[0]);
-                            setCurrRoomID(ele[0]);
-                            currRoomID !== ele[0] && setMessages([]);
-                            // fetchSubCollectionMessages(ele[0]);
-                            setCurrRoom(ele[1].name);
-                            setCurrRoomImage(ele[1].image);
-                            setHide(true);
-                            setReplyText("");
-                            setReplyingName("");
-                            setReplyingMessageID(null);
-                          }}
-                          className={`flex rounded-xl text-xl mb-2 py-2 pl-4 text-sm ${currRoom === ele[1].name ? "bg-white" : "bg-gray-200"}`}
-                          style={{
-                            color: "#003d63",
-                            border: `${currRoom === ele[1].name ? "1px solid #003d63" : ""}`,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <div
-                            className="w-8 h-8 mr-4"
+                  {rooms &&
+                    rooms.map((ele) => {
+                      if (ele.id === null) return; //if room does not exist
+                      return (
+                        ele.type === "group" && (
+                          <p
+                            key={ele.id}
+                            onClick={() => {
+                              // console.log(ele.id);
+                              handleRoomChange(ele, true);
+                            }}
+                            className={`flex rounded-xl text-xl mb-2 py-2 pl-4 text-sm ${currRoom === ele.name ? "bg-white" : "bg-gray-200"}`}
                             style={{
-                              backgroundColor: "#fff",
-                              borderRadius: "50%",
+                              color: "#003d63",
+                              border: `${currRoomID === ele.id ? "1px solid #003d63" : ""}`,
+                              cursor: "pointer",
                             }}
                           >
-                            {ele[1].image ? (
-                              <div className="h-full w-full flex flex-col justify-center">
-                                <Image
-                                  height={50}
-                                  width={50}
-                                  src={ele[1].image}
-                                  className="rounded-full"
-                                  style={{
-                                    backgroundColor: "#0C72B0",
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <div className="h-full w-full flex flex-col justify-center">
-                                <Image layout="responsive" src={ChatDP} />
-                              </div>
-                            )}
-                          </div>
-                          {ele[1].name}
-                        </p>
-                      )
-                    );
-                  })}
+                            <div
+                              className="w-8 h-8 mr-4"
+                              style={{
+                                backgroundColor: "#fff",
+                                borderRadius: "50%",
+                              }}
+                            >
+                              {ele.dpUrl ? (
+                                <div className="h-full w-full flex flex-col justify-center">
+                                  <Image
+                                    height={50}
+                                    width={50}
+                                    src={ele.dpUrl}
+                                    className="rounded-full"
+                                    style={{
+                                      backgroundColor: "#0C72B0",
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-full w-full flex flex-col justify-center">
+                                  <Image layout="responsive" src={ChatDP} />
+                                </div>
+                              )}
+                            </div>
+                            {ele.name}
+                            <div className="text-xs ml-auto pr-5 flex items-center">{ele?.unreadMessages !== 0 ? `(${ele?.unreadMessages})` : <></>}</div>
+                          </p>
+                        )
+                      );
+                    })}
                   <div className="font-normal w-3/5 mt-5" style={{ color: "#8D989F" }}>
                     Rooms
                   </div>
-                  {rooms.map((ele) => {
-                    if (ele[1] === null) return; //if room does not exist
-                    return (
-                      ele[1].type === "project" && (
-                        <p
-                          key={ele[1].name}
-                          onClick={() => {
-                            // console.log(ele[0]);
-                            currRoomID !== ele[0] && setMessages([]);
-                            setCurrRoomID(ele[0]);
-                            // fetchSubCollectionMessages(ele[0]);
-                            setCurrRoom(ele[1].name);
-                            setCurrRoomImage(ele[1].image);
-                            setHide(true);
-                            setReplyText("");
-                            setReplyingName("");
-                            setReplyingMessageID(null);
-                          }}
-                          className={`flex rounded-2xl mb-2 py-2 pl-4 text-xl ${currRoom === ele[1].name ? "bg-white" : "bg-gray-200"}`}
-                          style={{
-                            color: "#003d63",
-                            border: `${currRoom === ele[1].name ? "1px solid #003d63" : ""}`,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <div
-                            className="w-8 h-8 mr-4"
+                  {rooms &&
+                    rooms.map((ele) => {
+                      if (ele.id === null) return; //if room does not exist
+                      return (
+                        ele.type === "project" && (
+                          <p
+                            key={ele.id}
+                            onClick={() => {
+                              handleRoomChange(ele, true);
+                            }}
+                            className={`flex rounded-2xl mb-2 py-2 pl-4 text-xl ${currRoom === ele.name ? "bg-white" : "bg-gray-200"}`}
                             style={{
-                              backgroundColor: "transparent",
-                              borderRadius: "50%",
+                              color: "#003d63",
+                              border: `${currRoomID === ele.id ? "1px solid #003d63" : ""}`,
+                              cursor: "pointer",
                             }}
                           >
-                            {ele[1].image ? (
-                              <div
-                                className="flex flex-col justify-center bg-white rounded-full"
-                                style={{
-                                  overflow: "hidden",
-                                  borderRadius: "50%",
-                                }}
-                              >
-                                <Image
-                                  width={30}
-                                  height={30}
-                                  src={ele[1].image}
-                                  className="rounded-full"
+                            <div
+                              className="w-8 h-8 mr-4"
+                              style={{
+                                backgroundColor: "transparent",
+                                borderRadius: "50%",
+                              }}
+                            >
+                              {ele.dpUrl ? (
+                                <div
+                                  className="flex flex-col justify-center bg-white rounded-full"
                                   style={{
-                                    backgroundColor: "#0C72B0",
+                                    overflow: "hidden",
+                                    borderRadius: "50%",
                                   }}
-                                />
-                              </div>
-                            ) : (
-                              <div className="h-full w-full flex flex-col justify-center overflow-hidden rounded-full bg-white">
-                                <Image layout="responsive" src={ChatDP} />
-                              </div>
-                            )}
-                          </div>
-                          {ele[1].name}
-                        </p>
-                      )
-                    );
-                  })}
+                                >
+                                  <Image
+                                    width={30}
+                                    height={30}
+                                    src={ele.dpUrl}
+                                    className="rounded-full"
+                                    style={{
+                                      backgroundColor: "#0C72B0",
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-full w-full flex flex-col justify-center overflow-hidden rounded-full bg-white">
+                                  <Image layout="responsive" src={ChatDP} />
+                                </div>
+                              )}
+                            </div>
+                            {ele.name}
+                            <div className="text-xs ml-auto pr-5 flex items-center">{ele?.unreadMessages !== 0 ? `(${ele?.unreadMessages})` : <></>}</div>
+                          </p>
+                        )
+                      );
+                    })}
                 </div>
               </div>
             )
@@ -580,7 +692,7 @@ const Channels = () => {
 
           {/* CHAT PART */}
           {screenWidth >= 768 ? (
-            <div className="flex-1 bg-gray-100 flex flex-col sm:w-full">
+            <div className="flex-1 bg-gray-100 flex flex-col sm:w-full ">
               {currRoomID && (
                 <div className="bg-white flex w-full py-3 my-auto">
                   <div
@@ -613,59 +725,55 @@ const Channels = () => {
               {/* <p className="whitespace-pre-wrap">
                                             {msg.message.split(/\s+/g).map(word => word.match(URL_REGEX) ? <><a href={word} className="text-blue-500 underline" target="_blank">{word}</a>{" "}</> : word + " ")}
                                         </p> */}
-              <div className="overflow-auto h-screen">
+              <div className="overflow-auto h-screen overflow-x-hidden">
                 {messages?.map((msg, idx, array) => {
-                  const date = timestampToHuman(msg.data.timeStamp);
-                  const whiteRect = (idx + 1 < array.length && array[idx + 1].data.from !== msg.data.from) || idx == array.length - 1;
-                  const user = msg.data.from === authUser?.name;
-                  const reply = msg.data.replyTo;
+                  const date = unixToHumanReadable(msg.timestamp);
+                  const whiteRect = (idx + 1 < array.length && array[idx + 1].sentFrom.id !== msg.sentFrom.id) || idx == array.length - 1;
+                  const user = msg.sentFrom.id === authUser?.id;
+                  const reply = (msg.replyTo != null) ? msg.replyTo: null;
                   return (
-                    <div className="pl-7 mt-2" key={msg.data.timeStamp.seconds}>
-                      {((idx > 0 && array[idx - 1].data.from !== msg.data.from) || idx == 0) && (
+                    <div className="pl-7 mt-2" key={msg.timestamp}>
+                      {((idx > 0 && array[idx - 1].sentFrom.id !== msg.sentFrom.id) || idx == 0) && (
                         <p
                           className="text-gray-500 text-xs pl-10 w-full"
                           style={{
                             textAlign: `${user ? "right" : "left"}`,
                           }}
                         >
-                          {msg.data.from} | {date.time} {date.date}
+                          {msg.sentFrom.name} | {date}
                         </p>
                       )}
 
                       <div className={`flex ${reply && user ? "flex-col" : ""}`}>
-                        {whiteRect && msg.data.from !== authUser?.name && (
+                        {whiteRect && msg.sentFrom.id !== authUser?.id && (
                           <div className="w-6 h-6 bg-white mr-2 mt-auto rounded">
                             <Image src={ChatDP} />
                           </div>
                         )}
 
-                        {reply && user && (
-                          <div className="flex w-fit">
-                            <GetRepliedText msgID={reply} user={user} space={!whiteRect} />
-                          </div>
-                        )}
+                        {reply && user && <div className="flex w-full"><GetRepliedText msgID={reply.id} user={user} space={!whiteRect} /></div>}
                         {reply && !user && (
-                          <div className="flex flex-col">
-                            <GetRepliedText msgID={reply} user={user} space={!whiteRect} />
-                            <div className="flex">
+                          <div className="flex flex-col w-full">
+                            <GetRepliedText msgID={reply.id} user={user} space={!whiteRect} />
+                            <div className="flex w-full">
                               <RenderMessageWithLinks
-                                message={msg.data.message}
+                                message={msg.content}
                                 user={user}
                                 space={!whiteRect}
-                                name={msg.data.from}
+                                name={msg.sentFrom.name}
                                 id={msg.id}
-                                text={msg.data.message}
+                                text={msg.content}
                                 disableStatus={currRoom === "Announcements"}
                                 mobile={screenWidth < 768}
                               />
                               <div
-                                className="ml-2 cursor-pointer mt-2"
+                                className={`ml-2 cursor-pointer mt-2 iconContainer`}
                                 style={{ color: "#a9a9a9" }}
                                 onClick={() => {
-                                  displayReply(msg.id, msg.data.from, msg.data.message);
+                                  displayReply(msg.id, msg.sentFrom.name, msg.content);
                                 }}
                               >
-                                <FontAwesomeIcon icon={faReply} />
+                                <FontAwesomeIcon className="iconInvisible" icon={faReply} />
                               </div>
                             </div>
                           </div>
@@ -673,29 +781,33 @@ const Channels = () => {
                         {(!reply || user) && (
                           <>
                             <RenderMessageWithLinks
-                              message={msg.data.message}
+                              message={msg.content}
                               user={user}
                               space={!whiteRect}
-                              name={msg.data.from}
+                              name={msg.sentFrom.name}
                               id={msg.id}
-                              text={msg.data.message}
+                              text={msg.content}
                               disableStatus={currRoom === "Announcements"}
                               mobile={screenWidth < 768}
                             />
                             {!user && (
                               <div
-                                className="ml-2 cursor-pointer mt-2"
+                                className="ml-2 cursor-pointer mt-2 iconContainer"
                                 style={{ color: "#a9a9a9" }}
                                 onClick={() => {
-                                  displayReply(msg.id, msg.data.from, msg.data.message);
+                                  displayReply(msg.id, msg.sentFrom.name, msg.content);
                                 }}
                               >
-                                <FontAwesomeIcon icon={faReply} />
+                                <FontAwesomeIcon className="iconInvisible" icon={faReply} />
                               </div>
                             )}
                           </>
                         )}
                       </div>
+                      {((idx+1)<messages.length && msg.timestamp < roomLastSeen && messages[idx+1].timestamp > roomLastSeen) && 
+                      <div className="text-center text-xs">
+                          Unread messages
+                      </div>}
                     </div>
                   );
                 })}
@@ -733,11 +845,10 @@ const Channels = () => {
                     }}
                   />
                   <div
-                    className="bg-white cursor-pointer my-auto mr-2"
+                    className="bg-white cursor-pointer h-full pt-2 pb-2"
                     onClick={() => {
                       handleSend();
                     }}
-                    style={{ marginTop: "1.25%" }}
                   >
                     <Image src={Send} height={40} width={40} />
                   </div>
@@ -748,9 +859,9 @@ const Channels = () => {
             </div>
           ) : (
             <div className={`bg-gray-100 w-screen flex flex-col h-dvh`}>
-              <div className="bg-white flex fixed w-full top-12 z-30 align-center py-5 my-auto">
+              <div className="border bg-white flex fixed w-full top-12 z-30 align-center py-5 my-auto">
                 <div
-                  className="flex items-center w-9 h-9 mr-2 ml-6 rounded-full"
+                  className="flex w-9 h-9 mr-2 ml-6 rounded-full border"
                   // style={{backgroundColor: "#0C72B0"}}
                 >
                   {currRoomImage ? (
@@ -767,7 +878,7 @@ const Channels = () => {
                     <Image src={ChatDP} />
                   )}
                 </div>
-                <div className="font-bold text-xl" style={{ color: "#0C72B0" }}>
+                <div className="font-bold text-xl py-auto" style={{ color: "#0C72B0" }}>
                   {currRoom}
                 </div>
                 {hide && (
@@ -782,50 +893,46 @@ const Channels = () => {
                   </div>
                 )}
               </div>
-              <div className={`pt-32 ${hide ? "overflow-auto" : "overflow-auto"} h-screen pr-2`}>
+              <div className={`pt-32 overflow-x-hidden ${hide ? "overflow-auto" : "overflow-auto"} h-screen pr-2`}>
                 {messages?.map((msg, idx, array) => {
-                  const date = timestampToHuman(msg.data.timeStamp);
-                  const whiteRect = (idx + 1 < array.length && array[idx + 1].data.from !== msg.data.from) || idx == array.length - 1;
-                  const user = msg.data.from === authUser?.name;
-                  const reply = msg.data.replyTo;
+                  const date = unixToHumanReadable(msg.timestamp);
+                  const whiteRect = (idx + 1 < array.length && array[idx + 1].sentFrom.id !== msg.sentFrom.id) || idx == array.length - 1;
+                  const user = msg.sentFrom.id === authUser?.id;
+                  const reply = msg.replyTo?.id;
                   return (
-                    <div className="pl-7 mt-2" key={msg.data.timeStamp.seconds}>
-                      {((idx > 0 && array[idx - 1].data.from !== msg.data.from) || idx == 0) && (
+                    <div className="pl-7 mt-2" key={msg.timestamp}>
+                      {((idx > 0 && array[idx - 1].sentFrom.id !== msg.sentFrom.id) || idx == 0) && (
                         <p
                           className="text-gray-500 text-xs pl-10 w-full"
                           style={{
                             textAlign: `${user ? "right" : "left"}`,
                           }}
                         >
-                          {msg.data.from} | {date.time} {date.date}
+                          {msg.sentFrom.name} | {date}
                         </p>
                       )}
                       {/* <p className="whitespace-pre-wrap">
                                             {msg.message.split(/\s+/g).map(word => word.match(URL_REGEX) ? <><a href={word} className="text-blue-500 underline" target="_blank">{word}</a>{" "}</> : word + " ")}
                                         </p> */}
                       <div className={`flex ${reply && user ? "flex-col" : ""}`}>
-                        {whiteRect && msg.data.from !== authUser?.name && (
+                        {whiteRect && msg.sentFrom.id !== authUser?.id && (
                           <div className="w-6 h-6 bg-white mr-2 mt-auto rounded">
                             <Image src={ChatDP} />
                           </div>
                         )}
 
-                        {reply && user && (
-                          <div className="flex w-fit">
-                            <GetRepliedText msgID={reply} user={user} space={!whiteRect} />
-                          </div>
-                        )}
+                        {reply && user && <div className="flex w-fit"><GetRepliedText msgID={reply} user={user} space={!whiteRect} /></div>}
                         {reply && !user && (
                           <div className="flex flex-col">
                             <GetRepliedText msgID={reply} user={user} space={!whiteRect} />
                             <div className="flex">
                               <RenderMessageWithLinks
-                                message={msg.data.message}
+                                message={msg.content}
                                 user={user}
                                 space={!whiteRect}
-                                name={msg.data.from}
+                                name={msg.sentFrom.name}
                                 id={msg.id}
-                                text={msg.data.message}
+                                text={msg.content}
                                 disableStatus={currRoom === "Announcements"}
                                 mobile={screenWidth < 768}
                               />
@@ -833,7 +940,7 @@ const Channels = () => {
                                 className="ml-2 cursor-pointer mt-2"
                                 style={{ color: "#a9a9a9" }}
                                 onClick={() => {
-                                  displayReply(msg.id, msg.data.from, msg.data.message);
+                                  displayReply(msg.id, msg.sentFrom.name, msg.content);
                                 }}
                               >
                                 <FontAwesomeIcon icon={faReply} />
@@ -844,12 +951,12 @@ const Channels = () => {
                         {(!reply || user) && (
                           <>
                             <RenderMessageWithLinks
-                              message={msg.data.message}
+                              message={msg.content}
                               user={user}
                               space={!whiteRect}
-                              name={msg.data.from}
+                              name={msg.sentFrom.name}
                               id={msg.id}
-                              text={msg.data.message}
+                              text={msg.content}
                               disableStatus={currRoom === "Announcements"}
                               mobile={screenWidth < 768}
                             />
@@ -858,7 +965,7 @@ const Channels = () => {
                                 className="ml-2 cursor-pointer mt-2"
                                 style={{ color: "#a9a9a9" }}
                                 onClick={() => {
-                                  displayReply(msg.id, msg.data.from, msg.data.message);
+                                  displayReply(msg.id, msg.sentFrom.name, msg.content);
                                 }}
                               >
                                 <FontAwesomeIcon icon={faReply} />
@@ -867,6 +974,10 @@ const Channels = () => {
                           </>
                         )}
                       </div>
+                      {((idx+1)<messages.length && msg.timestamp < roomLastSeen && messages[idx+1].timestamp > roomLastSeen) && 
+                      <div className="text-center text-xs">
+                          Unread messages
+                      </div>}
                     </div>
                   );
                 })}

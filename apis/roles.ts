@@ -1,110 +1,131 @@
-import { db, storage } from '../firebase';
-import { deleteObject, ref } from 'firebase/storage';
-import { collection, query, where, getDocs, DocumentReference, addDoc, orderBy, limit, doc, Timestamp, deleteDoc, updateDoc, arrayRemove, arrayUnion, getDoc } from "firebase/firestore";
-import { IUser } from './users';
-import { ITaskData } from './tasks';
-export const rolesCollection = collection(db, "roles");
-const usersCollection = collection(db, "users");
-const tasksCollection = collection(db, "tasks");
-
-export interface IRoleData{
-    id: string;
-    name: string;
-    members: string[]; //emails of members
-}
+import axios from "../api/axios";
 
 export interface IRoleCreateData{
+    roleName: string;
+}
+
+export interface IRoleData extends IRoleCreateData{
+    id: number;
+}
+
+export const getAllRoles = async (): Promise<IRoleData[]|undefined> => {
+    try{
+        const response = await axios.get("/role");
+        if(response.status === 200){
+            return response.data.roles;
+        }
+        return undefined;
+    }
+    catch(err){
+        return undefined;
+    }
+}
+
+export const getRole = async (id: number): Promise<IRoleData|undefined> => {
+    try{
+        const response = await axios.get(`/role/${id}`);
+        if(response.status === 200){
+            return response.data.role;
+        }
+        return undefined;
+    }
+    catch(err){
+        return undefined;
+    }
+}
+
+export const createRole = async (data: IRoleCreateData): Promise<IRoleData|undefined> => {
+    try{
+        const response = await axios.post("/role", data);
+        if(response.status === 200){
+            return response.data.role;
+        }
+        return undefined;
+    }
+    catch(err){
+        return undefined;
+    }
+}
+
+export const updateRole = async (id: number, data: IRoleCreateData): Promise<IRoleData|undefined> => {
+    try{
+        const response = await axios.put(`/role/${id}`, data);
+        if(response.status === 200){
+            return response.data.role;
+        }
+        return undefined;
+    }
+    catch(err){
+        return undefined;
+    }
+}
+
+export const deleteRoles = async (ids: number[]): Promise<boolean> => {
+    try{
+        const data = {roleIds: ids};
+        const response = await axios.delete(`/role`, {data: data});
+        if(response.status === 200){
+            return true;
+        }
+        return false;
+    }
+    catch(err){
+        return false;
+    }
+}
+
+export interface IRoleAssignData{
+    status: "success"|"fail";
+    invalidEmails: string[]|null;
+    alreadyAssignedEmails: string[]|null;
+}
+
+export interface IRoleMember{
     name: string;
-    members: string[]; //emails of members
+    email: string;
 }
 
-export const getRole = async (data: IRoleData) => {
-    return getDocs(
-      query(
-        rolesCollection,
-        where("name", "==", data.name),
-        limit(1)
-      )
-    );
-};
-
-export const fetchRoles = async () =>{
-    return getDocs(rolesCollection)
+export interface IRoleMemberList{
+    role: number;
+    members: string[];
 }
 
-export const createRoles = async (data: IRoleCreateData) => {
-    return addDoc(rolesCollection, data)
+export const assignUsersToRole = async (roleId: number, userEmails: string[]): Promise<IRoleAssignData|undefined> => {
+    try{
+        const data = {roleId: roleId, userEmails: userEmails};
+        const response = await axios.post(`/role/assign`, data);
+        if(response.status === 200){
+            return response.data;
+        }
+        return undefined;
+    }
+    catch(err){
+        return undefined;
+    }
 }
 
-export const editRole = async (roleid: string, data: IRoleCreateData) => {
-
-    console.log(data.name, roleid)
-    return updateDoc(doc(rolesCollection, roleid), {
-        ...data
-    })
+export const getRoleMembers = async (id: number): Promise<IRoleMember[]|undefined> => {
+    try{
+        const response = await axios.get(`/role/${id}/users`);
+        if(response.status === 200){
+            return response.data.users;
+        }
+        return undefined;
+    }
+    catch(err){
+        return undefined;
+    }
 }
 
-export const assignRole = async (role: IRoleData, users: IUser[]) => {
-    if (!users.length) return
-    const emailIDs = users.map((doc)=>doc.email)
-    await Promise.all(users.map(async(u)=>{
-        await updateDoc(doc(db,"users", u.uid), {
-            roles: arrayUnion(role.name),
-        })
-    }))
-    return updateDoc(doc(db, "roles", role.id), {
-        members: arrayUnion(...emailIDs)
-    })
+export const removeRoleMembers = async (roleId: number, userEmail:string): Promise<boolean> => {
+    try{
+        const response = await axios.delete(`/role/${roleId}/user/${userEmail}`);
+        if(response.status === 200){
+            return true;
+        }
+        return false;
+    }
+    catch(err){
+        return false;
+    }
 }
-
-export const assignRoleToTask = async (role: IRoleData, tasks: ITaskData[]) => {
-    if (!tasks.length) return
-    const ids = tasks.map((doc)=>doc.id)
-    await Promise.all(tasks.map(async(u)=>{
-        await updateDoc(doc(db,"tasks", u.id), {
-            roles: arrayUnion(role.name),
-        })
-    }))
-    return updateDoc(doc(db, "roles", role.id), {
-        members: arrayUnion(...ids)
-    })
-}
-
-export const removeUsers = async (role: IRoleData, users: IUser[]) => {
-    if (!users.length) return
-    const emailIDs = users.map((doc)=>doc.email)
-    await Promise.all(users.map(async(u)=>{
-        await updateDoc(doc(db,"users", u.uid), {
-            roles: arrayRemove(role.name),
-        })
-    }))
-    return updateDoc(doc(db, "roles", role.id), {
-        members: arrayRemove(...emailIDs)
-    })
-}
-
-export const removeTasks = async (role: IRoleData, tasks: ITaskData[]) => {
-    if (!tasks.length) return
-    const ids = tasks.map((doc)=>doc.id)
-    await Promise.all(tasks.map(async(u)=>{
-        await updateDoc(doc(db,"users", u.id), {
-            roles: arrayRemove(role.name),
-        })
-    }))
-    return updateDoc(doc(db, "roles", role.id), {
-        members: arrayRemove(...ids)
-    })
-}
-
-export const deleteRole = async ( data: IRoleData)=>{
-    const users = await getDocs(query(usersCollection, where('roles', 'array-contains', data.name)))
-    Promise.all(users.docs.map(async (m) => {
-        return updateDoc(m.ref, { roles: arrayRemove(data.name)})
-    }))
-    const projects = await getDocs(query(query(tasksCollection, where('roles', 'array-contains', data.name))))
-    Promise.all(projects.docs.map(async (m) => {
-        return updateDoc(m.ref, { roles: arrayRemove(data.name)})
-    }))
-    return deleteDoc(doc(rolesCollection, data.id))
-}
-
