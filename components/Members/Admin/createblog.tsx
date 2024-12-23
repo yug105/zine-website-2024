@@ -123,7 +123,7 @@ const CreateNewBlog = ({ title, description, content, existingBlogId, url }: IBl
       const docRef = doc(db, "blogs", newBlogId);
       batch.set(docRef, { ...data, id: newBlogId });
     }
-
+    console.log(data.content)
     await batch.commit();
     router.push('/admin/blogsdisplay');
   };
