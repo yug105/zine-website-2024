@@ -5,7 +5,6 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {faFacebook, faTwitter, faInstagram, faLinkedin, faGithub,  faWordpress} from '@fortawesome/free-brands-svg-icons';
 import team from "../../images/team.jpeg"
 import RajeshSir from "../../images/rajeshsir.webp"
-
 import { founders, year2024, year2025, year2026,year2027 } from "../../constants/members";
 
 
