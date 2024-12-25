@@ -48,7 +48,7 @@
 
     "styled-components": "^6.1.8",
     "uuid": "^10.0.0",
-    "uuid.v4": "^1.0.0"
+    "uuid.v4": "^1.0.0",
 
     "sockjs-client": "^1.6.1",
     "zero-md": "^3.1.6"

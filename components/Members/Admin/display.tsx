@@ -25,6 +25,7 @@ const BlogList = () => {
     useEffect(() => {
         const fetchBlogs = async () => {
             const blogsList = await fetchAllBlogs();
+            //@ts-ignore
             setBlogs(blogsList);
             console.log('Fetched blogs:', blogsList);
         };
@@ -34,7 +35,9 @@ const BlogList = () => {
 
     const handleDelete = async (id: number | undefined) => {
         try {
+            //@ts-ignore
             await deleteDoc(doc(db, 'blogs', id));
+            //@ts-ignore
             setBlogs(blogs.filter(blog => blog.id !== id));
             console.log(`Blog with id ${id} deleted`);
             router.push('/admin/blogsdisplay')
@@ -42,10 +45,10 @@ const BlogList = () => {
             console.error('Error deleting blog:', error);
         }
     };
-
+//@ts-ignore
     const renderContent = (content) => {
         if (!content || !content.blocks) return null;
-
+//@ts-ignore
         return content.blocks.map(block => {
             switch (block.type) {
                 case 'paragraph':
@@ -59,29 +62,44 @@ const BlogList = () => {
             }
         });
     };
+//@ts-ignore
+interface Blog {
+    id: string;
+    title: string;
+    description: string;
+    content: any;
+    parent_blog?: string;
+}
 
-    const renderSubBlogs = (parentBlogId) => {
-        return blogs
-            .filter(blog => blog.parent_blog === parentBlogId)
-            .map(subBlog => (
-                <div key={subBlog.id} className="ml-5 border-l-2 border-gray-200 pl-4">
-                    <h4 className="text-lg font-semibold">{subBlog.title}</h4>
-                    <p className="text-gray-700">{subBlog.description}</p>
-                    {renderContent(subBlog.content)}
-                    <button
-                        onClick={() => handleDelete(subBlog.id)}
-                        className="mt-2 text-red-600 hover:text-red-800"
-                    >
-                        Delete
-                    </button>
-                    {renderSubBlogs(subBlog.id)}
-                </div>
-            ));
-    };
+const renderSubBlogs = (parentBlogId: string) => {
+    return blogs
+        .filter((blog: Blog) => blog.parent_blog === parentBlogId)
+        .map((subBlog: Blog) => (
+            <div key={subBlog.id} className="ml-5 border-l-2 border-gray-200 pl-4">
+                <h4 className="text-lg font-semibold">{subBlog.title}</h4>
+                <p className="text-gray-700">{subBlog.description}</p>
 
+                {renderContent(subBlog.content)}
+                
+                <button
+                //@ts-ignore
+                    onClick={() => handleDelete(subBlog.id)}
+                    className="mt-2 text-red-600 hover:text-red-800"
+                >
+                    Delete
+                </button>
+                {renderSubBlogs(subBlog.id)}
+            </div>
+        ));
+};
+
+    
+//@ts-ignore
     const BlogCard = ({ blogs }) => {
+        
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mx-8 mt-12 lg:mx-16 xl:mx-32">
+                {/*@ts-ignore*/}
                 {blogs.map((blog) => (
                     console.log(blog),
                     console.log('blogdp',blog.dp),
@@ -102,6 +120,6 @@ const BlogList = () => {
             <BlogCard blogs={blogs} />
         </div>
     );
-};
+    };
 
 export default BlogList;

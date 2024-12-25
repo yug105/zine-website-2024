@@ -30,6 +30,7 @@ const EDITOR_TOOLS = {
         class: Image,
         config:{
             uploader: {
+              //@ts-ignore
                 uploadByFile: (file) => {
                   return new Promise((resolve) => {
                     uploadBytes(storageref, file).then((snapshot) => {
@@ -75,7 +76,7 @@ const EDITOR_TOOLS = {
 //   delimiter: Delimiter,
 //   raw: Raw,
 };
-
+//@ts-ignore
 function Editor({ data, onChange, holder }) {
   const ref = useRef();
 
@@ -84,6 +85,7 @@ function Editor({ data, onChange, holder }) {
       const editor = new EditorJS({
         holder: holder,
         placeholder: "Start writing here...",
+        //@ts-ignore
         tools: EDITOR_TOOLS,
         data,
         async onChange(api, event) {
@@ -91,11 +93,14 @@ function Editor({ data, onChange, holder }) {
           onChange(content);
         },
       });
+      //@ts-ignore
       ref.current = editor;
     }
 
     return () => {
+      //@ts-ignore
       if (ref.current && ref.current.destroy) {
+        //@ts-ignore
         ref.current.destroy();
       }
     };

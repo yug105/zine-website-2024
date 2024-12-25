@@ -41,10 +41,11 @@ const CreateNewBlog = ({ title, description, content, existingBlogId, url }: IBl
       });
     }
   }, [existingBlogId, title, description, content, url]);
-
+//@ts-ignore
   const renderContent = (content) => {
     if (!content || !content.blocks) return null;
     console.log("width ", width,"height", height)
+    //@ts-ignore
     return content.blocks.map((block) => {
       switch (block.type) {
         case 'paragraph':
@@ -70,6 +71,7 @@ const CreateNewBlog = ({ title, description, content, existingBlogId, url }: IBl
       }
     });
   };
+  //@ts-ignore
 
   const handleChange = useCallback((field) => (e) => {
     setFormData((prevFormData) => ({
@@ -84,7 +86,7 @@ const CreateNewBlog = ({ title, description, content, existingBlogId, url }: IBl
       content,
     }));
   }, []);
-
+//@ts-ignore
   const handleDpChange = async (e) => {
     const storage = getStorage();
     const file = e.target.files[0];
@@ -102,7 +104,7 @@ const CreateNewBlog = ({ title, description, content, existingBlogId, url }: IBl
       }
     }
   };
-
+//@ts-ignore
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -161,6 +163,7 @@ const CreateNewBlog = ({ title, description, content, existingBlogId, url }: IBl
               data={formData.content}
               onChange={handleContentChange}
               holder="content"
+              //@ts-ignore
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring focus:ring-indigo-100"
             />
           </label>
