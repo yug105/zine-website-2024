@@ -5,10 +5,13 @@ import { Plus, Image as ImageIcon, GripVertical, Type, Heading, X ,Eye,Edit2} fr
 import { Code, Quote, List, ListOrdered } from 'lucide-react';
 import { BlogFormatter } from './Blogformat';
 import axios from 'axios';
+import ImageUploadBlock from './Imageupload';
 import ProtectedRoute from "./ProtectedRoute";
+import apiimg from '../../../api/axios';
+import { uploadFile,deleteFile } from '../../../apis/room';
 import { ToastContainer, toast } from "react-toastify";
 import SideNav from "../sidenav";
-
+import { set } from 'mongoose';
 export type BlockType = 'text' | 'image' | 'header' | 'code' | 'quote' | 'list';
 export type ListType = 'bullet' | 'number';
 export interface BlockOptions {
@@ -16,6 +19,15 @@ export interface BlockOptions {
   listType?: ListType;
   content?: string;
 }
+interface FileState {
+  file?: File;
+  description?: string;
+  publicId?: string;
+  content?: string;
+  url?: string;
+  status?: 'idle' | 'uploading' | 'uploaded' | 'failed';
+}
+
 interface Block {
   id: string;
   type: 'text' | 'image' | 'header' | 'code' | 'quote' | 'list';
@@ -47,6 +59,7 @@ interface IBlogData {
   url?: string;
   parentBlogId?: number | null;
 }
+
 
 
 const ContentRenderer = ({ content, className = "" }) => {
@@ -120,21 +133,35 @@ const ContentRenderer = ({ content, className = "" }) => {
             </ListComponent>
           );
 
-        case 'image':
-          return (
-            <div className="relative w-full my-8">
-              <div className="relative h-96">
-                <Image
-                  src={block.content}
-                  alt="Blog content"
-                  layout="fill"
-                  objectFit="contain"
-                  className="rounded-lg"
-                  unoptimized
-                />
-              </div>
+          case 'image':
+      return (
+        <div className="relative w-full space-y-4">
+          <div className="flex items-center space-x-4">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageUpload(file);
+              }}
+              className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {isUploading && <span>Uploading...</span>}
+          </div>
+
+          {previewUrl && (
+            <div className="relative w-full h-64">
+              <Image
+                src={previewUrl}
+                alt="Content image"
+                layout="fill"
+                objectFit="contain"
+                className="rounded-lg"
+              />
             </div>
-          );
+          )}
+        </div>
+      );
 
         default:
           return null;
@@ -218,7 +245,7 @@ const useBlockManager = (initialBlocks: Block[] = []) => {
     index: number,
     options?: { language?: string; listType?: 'bullet' | 'number' }
   ) => {
-    console.log('Adding block:', { type, index, options }); // Debug log
+    // console.log('Adding block:', { type, index, options }); // Debug log
 
     setBlocks(prevBlocks => {
       const newBlock: Block = {
@@ -239,7 +266,7 @@ const useBlockManager = (initialBlocks: Block[] = []) => {
         order: idx
       }));
 
-      console.log('New blocks array:', newBlocks); // Debug log
+      // console.log('New blocks array:', newBlocks); // Debug log
       return newBlocks;
     });
   }, []);
@@ -397,9 +424,34 @@ const LanguageSelector: React.FC<{
 
 const BlockComponent: React.FC<{
   block: Block;
-  onChange: (content: string, language?: string) => void;
+  onChange: (content: string, imageUrl?: string) => void;
   onDelete: () => void;
-}> = ({ block, onChange, onDelete }) => {
+  blogName: string;
+  imageCount: number;
+}> = ({ block, onChange, onDelete, blogName, imageCount }) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(block.imageUrl || '');
+
+  const handleImageUpload = async (file: File) => {
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      // Create unique description for each content image
+      const imageDescription = `contentimg:${blogName}_${imageCount}`;
+      const response = await uploadFile(file, imageDescription);
+      
+      if (response.url) {
+        setPreviewUrl(response.url);
+        onChange(response.url); // Update block content with image URL
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error('Failed to upload image');
+    } finally {
+      setIsUploading(false);
+    }
+  };
   switch (block.type) {
     case 'text':
       return (
@@ -439,29 +491,35 @@ const BlockComponent: React.FC<{
         </div>
       );
 
-    case 'image':
-      return (
-        <div className="relative w-full">
-          <input
-            type="text"
-            value={block.content}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="Enter image URL..."
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          />
-          {block.content && (
-            <div className="mt-2 relative w-full h-64">
-              <Image
-                src={block.content}
-                alt="Content image preview"
-                layout="fill"
-                objectFit="contain"
-                className="rounded-lg"
+      case 'image':
+        return (
+          <div className="relative w-full space-y-4">
+            <div className="flex items-center space-x-4">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImageUpload(file);
+                }}
+                className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {isUploading && <span>Uploading...</span>}
             </div>
-          )}
-        </div>
-      );
+  
+            {previewUrl && (
+              <div className="relative w-full h-64">
+                <Image
+                  src={previewUrl}
+                  alt="Content image"
+                  layout="fill"
+                  objectFit="contain"
+                  className="rounded-lg"
+                />
+              </div>
+            )}
+          </div>
+        );
 
     case 'quote':
       return (
@@ -511,6 +569,126 @@ const CreateNewBlog: React.FC<IBlogData> = ({
   const [error, setError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
+  const [fileState, setFileState] = useState<FileState | null>(null);
+  const [imageCounter, setImageCounter] = useState(0);
+  const[isUploading, setIsUploading] = useState(false);
+  // const[PreviewUrl,setPreviewUrl]= useState('')
+  
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setFileState({
+        file: file,
+        description: formData.blogName,
+        status: 'idle',
+      });
+    }
+  };
+  const handleFileContent = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setFileState({
+        file: file,
+        content: "contentimg:"+formData.blogName,
+        status: 'idle',
+      });
+    }
+  };
+
+  const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (fileState) {
+      setFileState({
+        ...fileState,
+        description: event.target.value,
+      });
+    }
+  };
+
+  const handleUpload = async () => {
+    if (fileState && fileState.status === 'idle') {
+      setIsUploading(true);
+      try {
+        // console.log(fileState.file, fileState.description);
+        let res = null
+        if(fileState.file)
+          res = await uploadFile(fileState.file, ((fileState.description)?fileState.description:''));
+        setFormData(prev => ({ ...prev, dpURL: res.url }));
+        // console.log(formData)
+
+        // console.log(res);
+        setFileState({
+          ...fileState,
+          publicId: res.publicId,
+          url: res.url,
+          status: 'uploaded',
+        });
+      } catch (error) {
+        setFileState({ ...fileState, status: 'failed' });
+        alert('Failed to upload file.');
+      } finally {
+        setIsUploading(false);
+      }
+    } 
+    
+    else if (fileState && fileState.status === 'uploaded') {
+      alert('No file to upload or already uploaded.');
+    }
+  };
+  const uploadimgcontent= async ()=>{
+    if (fileState && fileState.content) {
+      setIsUploading(true);
+      try {
+        let res=null
+        if(fileState.content)
+          res = await uploadFile(fileState.file, ((fileState.content)?fileState.content:''));
+        setFormData(prev => ({ ...prev, imagePath: res.url }));
+        // console.log(res);
+        setFileState({
+          ...fileState,
+          publicId: res.publicId,
+          url: res.url,
+          status: 'uploaded',
+        });
+      } catch (error) {
+        setFileState({ ...fileState, status: 'failed' });
+        alert('Failed to upload file.');
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  }
+
+  const removeFile = async () => {
+    if (fileState && fileState.publicId) {
+      setIsUploading(true);
+      try {
+        await deleteFile(fileState.publicId);
+        setFileState(null);
+      } catch (error) {
+        alert('Failed to delete file.');
+      } finally {
+        setIsUploading(false);
+      }
+    } else {
+      alert('No file to delete.');
+    }
+  };
+  const handledelete = async () => {
+    if (fileState?.url){
+      try{
+        console.log(fileState.url)
+        await removeFile();
+        setFileState(null);
+        setFormData(prev => ({ ...prev, dpURL: '' }));
+        console.log(formData)
+      } catch (error) {
+        alert('Failed to delete file.');
+      } finally {
+        setIsUploading(false);
+      }
+      }
+    }
+  
 
   const [formData, setFormData] = useState<BlogFormData>({
     blogName: title,
@@ -657,17 +835,14 @@ const CreateNewBlog: React.FC<IBlogData> = ({
   
   const saveBlog = async (blogData: BlogFormData) => {
     try {
-      console.log('Saving blog with data:', blogData);
-      
-      // Ensure parentBlog is properly formatted
       const finalBlogData = {
         ...blogData,
         parentBlog: Number(blogData.parentBlog) || null,  // Convert to number or null
       };
       
       console.log('Formatted blog data:', finalBlogData);
-      
       const response = await api.post('/blog', finalBlogData);
+      console.log('Save response:', response);
       if (response.status === 200) {
         toast.success('Blog created successfully');
         router.push('/admin/blogsadmin');
@@ -695,7 +870,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
         imagePath: blogData.imagePath || ""
       };
   
-      console.log('Update payload:', updatePayload);
+      // console.log('Update payload:', updatePayload);
   
       const response = await api.put(`/blog/${blogId}`, updatePayload);
       if (response.status === 200) {
@@ -720,17 +895,16 @@ const CreateNewBlog: React.FC<IBlogData> = ({
   
     setIsSubmitting(true);
     setError(null);
-  
+    
     try {
       const blogData = {
         ...formData,
         content: JSON.stringify(blocks),
-        blogID: Number(blogId),
         parentBlog: Number(parentId)  // Ensure parentId is included
       };
   
       if (isEditMode) {
-        await updateBlog(blogData);
+        await updateBlog({...blogData,blogID: Number(blogId)});
       } else {
         await saveBlog(blogData);
       }
@@ -743,7 +917,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
   };
   const handleBlockChange = useCallback((index: number, content: string, language?: string) => {
     const block = blocks[index];
-    console.log(block);
+    // console.log(block);
     
     if (block.type === 'code' && language) {
       updateBlock(index, { content, language });
@@ -764,11 +938,53 @@ const CreateNewBlog: React.FC<IBlogData> = ({
       updateBlock(index, { content });
     }
   }, [blocks, updateBlock]);
+  const handleBlockChangee = useCallback((index: number, content: string, language?: string) => {
+    const block = blocks[index];
+    
+    if (block.type === 'image') {
+      // Update formData.imagePath with the new image URL
+      setFormData(prev => ({
+        ...prev,
+        imagePath: content // This is the image URL from the upload
+      }));
+      updateBlock(index, { content });
+      console.log(formData)
+      setImageCounter(prev => prev + 1);
+    } else if (block.type === 'code' && language) {
+      updateBlock(index, { content, language });
+    } else {
+      updateBlock(index, { content });
+    }
+  }, [blocks, updateBlock, setFormData]);
+
+  // const handleImageUpload = async (file: File) => {
+  //   if (!file) return;
+  
+  //   setIsUploading(true);
+  //   try {
+  //     // Create unique description for each content image
+  //     const imageDescription = `contentimg:${formData.blogName}_${imageCounter}`;
+  //     const response = await uploadFile(file, imageDescription);
+  //     console.log(response)
+      
+  //     if (response.url) {
+  //       setPreviewUrl(response.url);
+  //       onChange(response.url); // Update block content with image URL
+  //     }
+  //   } catch (error) {
+  //     console.error('Error uploading image:', error);
+  //     toast.error('Failed to upload image');
+  //   } finally {
+  //     setIsUploading(false);
+  //   }
+  // };
+
 
   const togglePreviewMode = () => {
     setPreviewMode(!previewMode);
   };
 
+  
   return (
     <ProtectedRoute>
       <ToastContainer
@@ -783,49 +999,68 @@ const CreateNewBlog: React.FC<IBlogData> = ({
         pauseOnHover
         theme="light"
       />
-      <div className="grid grid-cols-12 h-screen" style={{background: "#EFEFEF"}}>
-        <div className="col-span-2">
+      <div className="grid grid-cols-12 h-screen bg-gray-200">
+        <div className="col-span-2 bg-gray-800">
           <SideNav />
         </div>
         <div className="col-span-10 h-screen overflow-y-auto">
-          <div className="max-w-6xl w-full mx-auto p-6">
+          <div className="max-w-6xl mx-auto p-6">
             {error && (
               <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
                 {error}
               </div>
             )}
-            
+
             <form onSubmit={handleSubmit} className="space-y-6 mb-8">
               <input
                 type="text"
                 value={formData.blogName}
                 onChange={(e) => setFormData(prev => ({ ...prev, blogName: e.target.value }))}
                 placeholder="Enter blog title..."
-                className="w-full text-4xl font-bold border-none outline-none mb-8 placeholder-gray-300 bg-transparent"
+                className="w-full text-4xl font-bold border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
-  
+
               <div className="relative w-full mb-8">
-                <input
-                  type="text"
-                  value={formData.dpURL}
-                  onChange={(e) => setFormData(prev => ({ ...prev, dpURL: e.target.value }))}
-                  placeholder="Enter featured image URL..."
-                  className="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                />
+                <label className="block text-sm font-medium text-gray-700">
+                  Featured Image
+                </label>
+
+                <div className="flex items-center space-x-4">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleUpload}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    Upload Image
+                  </button>
+                  <button 
+                  type="button"
+                  onClick={handledelete}>
+                    Delete Image
+                  </button>
+                </div>
+
                 {formData.dpURL && (
-                  <div className="mt-4 relative w-full min-h-[400px] overflow-hidden">
-                    <Image
-                      src={formData.dpURL}
-                      alt="Featured image preview"
-                      layout="fill"
-                      objectFit="contain"
-                      className="!relative !h-auto !w-auto max-h-[600px] rounded-lg"
-                    />
+                  <div className="relative w-full h-96"> {/* Added fixed height to parent */}
+                  <Image
+                    src={formData.dpURL}
+                    alt="Featured image preview"
+                    layout="fill"
+                    objectFit="contain"
+                    className="rounded-lg"
+                  />
                   </div>
                 )}
               </div>
-  
+
               <textarea
                 value={formData.blogDescription}
                 onChange={(e) => setFormData(prev => ({ ...prev, blogDescription: e.target.value }))}
@@ -834,7 +1069,6 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                 rows={3}
                 required
               />
-
               <div className="flex justify-end mb-4">
                 <button
                   type="button"
@@ -883,11 +1117,13 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                       </div>
     
                       <div className="flex-grow">
-                        <BlockComponent
-                          block={block}
-                          onChange={(content, language) => handleBlockChange(index, content, language)}
-                          onDelete={() => removeBlock(index)}
-                        />
+                      <BlockComponent
+                            block={block}
+                            onChange={(content, language) => handleBlockChangee(index, content, language)}
+                            onDelete={() => removeBlock(index)}
+                            blogName={formData.blogName}
+                            imageCount={imageCounter}
+                          />
                       </div>
     
                       <div className="opacity-0 group-hover:opacity-100 flex gap-2">

@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { Clock, Loader } from 'lucide-react';
 import DOMPurify from 'dompurify';
+import apiimg from '../../../api/axios';
 import axios from 'axios';
 
 interface Blog {

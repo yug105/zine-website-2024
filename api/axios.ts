@@ -17,9 +17,9 @@ api.interceptors.request.use(function (config) {
   return config;
 });
 
-// export const setAuthorizationHeader = (token: string) => {
-//   api.defaults.headers['Authorization'] = `Bearer ${token}`;
-// };
+export const setAuthorizationHeader = (token: string) => {
+  api.defaults.headers['Authorization'] = `Bearer ${token}`;
+};
 
 export default api;
 
