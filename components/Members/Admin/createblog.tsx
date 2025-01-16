@@ -41,14 +41,9 @@ interface BlogFormData {
   blogID?: number;
   blogName: string;
   blogDescription: string;
-  content: string;  // Changed from Block[] to string
+  content: string;
   dpURL: string;
-  imagePath?: string;
   parentBlog: number | null;
-  createdAt?: {
-    seconds: number;
-    nanos: number;
-  };
 }
 
 interface IBlogData {
@@ -424,7 +419,7 @@ const LanguageSelector: React.FC<{
 
 const BlockComponent: React.FC<{
   block: Block;
-  onChange: (content: string, imageUrl?: string) => void;
+  onChange: (content: string, language?: string) => void;
   onDelete: () => void;
   blogName: string;
   imageCount: number;
@@ -437,13 +432,12 @@ const BlockComponent: React.FC<{
 
     setIsUploading(true);
     try {
-      // Create unique description for each content image
       const imageDescription = `contentimg:${blogName}_${imageCount}`;
       const response = await uploadFile(file, imageDescription);
       
       if (response.url) {
         setPreviewUrl(response.url);
-        onChange(response.url); // Update block content with image URL
+        onChange(response.url);
       }
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -452,6 +446,7 @@ const BlockComponent: React.FC<{
       setIsUploading(false);
     }
   };
+
   switch (block.type) {
     case 'text':
       return (
@@ -491,35 +486,35 @@ const BlockComponent: React.FC<{
         </div>
       );
 
-      case 'image':
-        return (
-          <div className="relative w-full space-y-4">
-            <div className="flex items-center space-x-4">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleImageUpload(file);
-                }}
-                className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {isUploading && <span>Uploading...</span>}
-            </div>
-  
-            {previewUrl && (
-              <div className="relative w-full h-64">
-                <Image
-                  src={previewUrl}
-                  alt="Content image"
-                  layout="fill"
-                  objectFit="contain"
-                  className="rounded-lg"
-                />
-              </div>
-            )}
+    case 'image':
+      return (
+        <div className="relative w-full space-y-4">
+          <div className="flex items-center space-x-4">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageUpload(file);
+              }}
+              className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {isUploading && <span>Uploading...</span>}
           </div>
-        );
+
+          {previewUrl && (
+            <div className="relative w-full h-64">
+              <Image
+                src={previewUrl}
+                alt="Content image"
+                layout="fill"
+                objectFit="contain"
+                className="rounded-lg"
+              />
+            </div>
+          )}
+        </div>
+      );
 
     case 'quote':
       return (
@@ -641,7 +636,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
         let res=null
         if(fileState.content)
           res = await uploadFile(fileState.file, ((fileState.content)?fileState.content:''));
-        setFormData(prev => ({ ...prev, imagePath: res.url }));
+        // setFormData(prev => ({ ...prev, imagePath: res.url }));
         // console.log(res);
         setFileState({
           ...fileState,
@@ -690,14 +685,14 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     }
   
 
-  const [formData, setFormData] = useState<BlogFormData>({
-    blogName: title,
-    blogDescription: description,
-    content: '',
-    dpURL: url,
-    parentBlog: parentId ? Number(parentId) : null,
-    imagePath: ""
-  });
+    const [formData, setFormData] = useState<BlogFormData>({
+      blogName: title,
+      blogDescription: description,
+      content: '',
+      dpURL: url,
+      parentBlog: parentId ? Number(parentId) : null
+    });
+  
   // const parent = use
   const {
     blocks,
@@ -719,7 +714,6 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     const fetchBlogData = async () => {
       if (edit === 'true') {
         try {
-          // If parentId is empty, use -1 as the query parameter and search for blogId
           const queryId = parentId ? Number(parentId) : -1;
           const response = await api.get(`/blog`, {
             params: { id: queryId }
@@ -727,12 +721,10 @@ const CreateNewBlog: React.FC<IBlogData> = ({
           
           let targetBlog;
           if (parentId) {
-            // If parentId exists, find blog by blogId in the parent's blogs
             targetBlog = response.data.blogs.find(
               (blog: any) => blog.blogID === Number(blogId)
             );
           } else {
-            // If no parentId, find the blog directly by comparing with blogId
             targetBlog = response.data.blogs.find(
               (blog: any) => blog.blogID === Number(blogId)
             );
@@ -768,8 +760,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                 blogDescription: targetBlog.blogDescription,
                 content: JSON.stringify(formattedBlocks),
                 dpURL: targetBlog.dpURL,
-                parentBlog: parentId ? Number(parentId) : null, // Set parentBlog to null if no parentId
-                imagePath: targetBlog.imagePath || ""
+                parentBlog: parentId ? Number(parentId) : null
               });
               
               setIsEditMode(true);
@@ -835,25 +826,38 @@ const CreateNewBlog: React.FC<IBlogData> = ({
   
   const saveBlog = async (blogData: BlogFormData) => {
     try {
-      const finalBlogData = {
-        ...blogData,
-        parentBlog: Number(blogData.parentBlog) || null,  // Convert to number or null
+      // Ensure content is properly stringified
+      const content = typeof blogData.content === 'string' 
+        ? blogData.content 
+        : JSON.stringify(blocks);
+  
+      // Construct the payload with all required fields
+      const payload = {
+        blogName: blogData.blogName,
+        blogDescription: blogData.blogDescription,
+        content: content,
+        dpURL: blogData.dpURL || '',
+        parentBlog: blogData.parentBlog ? Number(blogData.parentBlog) : null
       };
-      
-      console.log('Formatted blog data:', finalBlogData);
-      const response = await api.post('/blog', finalBlogData);
-      console.log('Save response:', response);
-      if (response.status === 200) {
+  
+      console.log('Sending payload:', payload);
+  
+      const response = await api.post('/blog', payload);
+  
+      if (response.status === 200 || response.status === 201) {
         toast.success('Blog created successfully');
         router.push('/admin/blogsadmin');
+        return { success: true, data: response.data };
+      } else {
+        throw new Error('Unexpected response status: ' + response.status);
       }
-      return { success: true, data: response.data };
     } catch (error: any) {
-      console.error('Save error:', error);
-      toast.error(error.response?.data?.message || 'Failed to save blog');
-      throw error;
+      console.error('Save error details:', error.response || error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save blog';
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
     }
-  }
+  };
   const updateBlog = async (blogData: BlogFormData) => {
     try {
       if (!blogId) {
@@ -866,11 +870,8 @@ const CreateNewBlog: React.FC<IBlogData> = ({
         blogDescription: blogData.blogDescription,
         content: JSON.stringify(blocks),
         dpURL: blogData.dpURL,
-        parentBlog: Number(parentId),  // Maintain parent relationship
-        imagePath: blogData.imagePath || ""
+        parentBlog: Number(parentId)
       };
-  
-      // console.log('Update payload:', updatePayload);
   
       const response = await api.put(`/blog/${blogId}`, updatePayload);
       if (response.status === 200) {
@@ -889,32 +890,36 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     e.preventDefault();
     
     if (!formData.blogName.trim()) {
-      setError('Blog title is required');
+      toast.error('Blog title is required');
       return;
     }
   
     setIsSubmitting(true);
-    setError(null);
     
     try {
+      const contentStr = JSON.stringify(blocks);
+      
       const blogData = {
-        ...formData,
-        content: JSON.stringify(blocks),
-        parentBlog: Number(parentId)  // Ensure parentId is included
+        blogName: formData.blogName,
+        blogDescription: formData.blogDescription,
+        content: contentStr,
+        dpURL: formData.dpURL || '',
+        parentBlog: parentId ? Number(parentId) : null
       };
   
-      if (isEditMode) {
-        await updateBlog({...blogData,blogID: Number(blogId)});
+      if (isEditMode && blogId) {
+        await updateBlog({ ...blogData, blogID: Number(blogId) });
       } else {
         await saveBlog(blogData);
       }
     } catch (error: any) {
       console.error('Submit error:', error);
-      setError(error.message || 'Failed to save blog. Please try again.');
+      toast.error(error.message || 'Failed to save blog. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
+  
   const handleBlockChange = useCallback((index: number, content: string, language?: string) => {
     const block = blocks[index];
     // console.log(block);
@@ -942,20 +947,52 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     const block = blocks[index];
     
     if (block.type === 'image') {
-      // Update formData.imagePath with the new image URL
-      setFormData(prev => ({
-        ...prev,
-        imagePath: content // This is the image URL from the upload
-      }));
+      // Update block content
       updateBlock(index, { content });
-      console.log(formData)
+      
+      // Update formData with new content string
+      setFormData(prev => {
+        const updatedBlocks = blocks.map((b, i) => 
+          i === index ? { ...b, content } : b
+        );
+        
+        return {
+          ...prev,
+          content: JSON.stringify(updatedBlocks)
+        };
+      });
+      
       setImageCounter(prev => prev + 1);
     } else if (block.type === 'code' && language) {
+      // Handle code blocks with language
       updateBlock(index, { content, language });
+      
+      setFormData(prev => {
+        const updatedBlocks = blocks.map((b, i) => 
+          i === index ? { ...b, content, language } : b
+        );
+        
+        return {
+          ...prev,
+          content: JSON.stringify(updatedBlocks)
+        };
+      });
     } else {
+      // Handle all other block types
       updateBlock(index, { content });
+      
+      setFormData(prev => {
+        const updatedBlocks = blocks.map((b, i) => 
+          i === index ? { ...b, content } : b
+        );
+        
+        return {
+          ...prev,
+          content: JSON.stringify(updatedBlocks)
+        };
+      });
     }
-  }, [blocks, updateBlock, setFormData]);
+  }, [blocks, updateBlock, setFormData, setImageCounter]);
 
   // const handleImageUpload = async (file: File) => {
   //   if (!file) return;
