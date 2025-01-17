@@ -4,7 +4,7 @@ let db_url = process.env.NEXT_PUBLIC_API_URL;
 const api = axios.create({
   baseURL: db_url,
   headers: {
-     "stage": "prod"
+     "stage": "test"
   }
 
 

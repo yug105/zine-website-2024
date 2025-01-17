@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useCallback,useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Image from 'next/image';
-import { Plus, Image as ImageIcon, GripVertical, Type, Heading, X ,Eye,Edit2} from 'lucide-react';
+import { Plus, Image as ImageIcon, GripVertical, Type, Heading, X, Eye, Edit2 } from 'lucide-react';
 import { Code, Quote, List, ListOrdered } from 'lucide-react';
-import { BlogFormatter } from './Blogformat';
 import axios from 'axios';
-import ImageUploadBlock from './Imageupload';
+import DOMPurify from 'dompurify';
 import ProtectedRoute from "./ProtectedRoute";
 import apiimg from '../../../api/axios';
-import { uploadFile,deleteFile } from '../../../apis/room';
+import { uploadFile, deleteFile } from '../../../apis/room';
 import { ToastContainer, toast } from "react-toastify";
 import SideNav from "../sidenav";
 import { set } from 'mongoose';
@@ -54,151 +53,155 @@ interface IBlogData {
   url?: string;
   parentBlogId?: number | null;
 }
+interface ContentRendererProps {
+  content: Block[] | string;
+  className?: string;
+}
 
 
 
-const ContentRenderer = ({ content, className = "" }) => {
-  const renderBlock = (block) => {
-    try {
-      switch (block.type) {
-        case 'text':
-          return (
-            <div
-              className="prose max-w-none"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(block.content)
-              }}
-            />
-          );
+// const ContentRenderer: React.FC<ContentRendererProps> = ({ content: blocks, className = "" }) => {
+//   const renderBlock = (block: Block) => {
+//     console.log(block)
+//     try {
+//       switch (block.type) {
+//         case 'text':
+//           return (
+//             <div
+//               className="prose max-w-none"
+//               dangerouslySetInnerHTML={{
+//                 __html: DOMPurify.sanitize(block.content)
+//               }}
+//             />
+//           );
 
-        case 'header':
-          return (
-            <h2
-              className="text-2xl font-bold mt-6 mb-4"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(block.content)
-              }}
-            />
-          );
+//         case 'header':
+//           return (
+//             <h2
+//               className="text-2xl font-bold mt-6 mb-4"
+//               dangerouslySetInnerHTML={{
+//                 __html: DOMPurify.sanitize(block.content)
+//               }}
+//             />
+//           );
 
-        case 'quote':
-          return (
-            <blockquote
-              className="border-l-4 border-gray-300 pl-4 italic my-4"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(block.content)
-              }}
-            />
-          );
+//         case 'quote':
+//           return (
+//             <blockquote
+//               className="border-l-4 border-gray-300 pl-4 italic my-4"
+//               dangerouslySetInnerHTML={{
+//                 __html: DOMPurify.sanitize(block.content)
+//               }}
+//             />
+//           );
 
-        case 'code':
-          return (
-            <div className="relative">
-              {block.language && (
-                <div className="absolute top-2 right-2 px-2 py-1 text-sm bg-gray-800 text-gray-300 rounded">
-                  {block.language}
-                </div>
-              )}
-              <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto">
-                <code className="font-mono text-sm whitespace-pre-wrap break-words">
-                  {block.content}
-                </code>
-              </pre>
-            </div>
-          );
+//         case 'code':
+//           return (
+//             <div className="relative">
+//               {block.language && (
+//                 <div className="absolute top-2 right-2 px-2 py-1 text-sm bg-gray-800 text-gray-300 rounded">
+//                   {block.language}
+//                 </div>
+//               )}
+//               <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto">
+//                 <code className="font-mono text-sm whitespace-pre-wrap break-words">
+//                   {block.content}
+//                 </code>
+//               </pre>
+//             </div>
+//           );
 
-        case 'list':
-          const listItems = block.content.split('\n').filter(item => item.trim());
-          const ListComponent = block.listType === 'bullet' ? 'ul' : 'ol';
-          return (
-            <ListComponent
-              className={`ml-6 space-y-2 ${
-                block.listType === 'bullet' ? 'list-disc' : 'list-decimal'
-              }`}
-            >
-              {listItems.map((item, index) => (
-                <li
-                  key={index}
-                  className="text-gray-700"
-                  dangerouslySetInnerHTML={{
-                    __html: DOMPurify.sanitize(item)
-                  }}
-                />
-              ))}
-            </ListComponent>
-          );
+//         case 'list':
+//           const listItems = block.content.split('\n').filter(item => item.trim());
+//           const ListComponent = block.listType === 'bullet' ? 'ul' : 'ol';
+//           return (
+//             <ListComponent
+//               className={`ml-6 space-y-2 ${block.listType === 'bullet' ? 'list-disc' : 'list-decimal'
+//                 }`}
+//             >
+//               {listItems.map((item, index) => (
+//                 <li
+//                   key={index}
+//                   className="text-gray-700"
+//                   dangerouslySetInnerHTML={{
+//                     __html: DOMPurify.sanitize(item)
+//                   }}
+//                 />
+//               ))}
+//             </ListComponent>
+//           );
 
-          case 'image':
-      return (
-        <div className="relative w-full space-y-4">
-          <div className="flex items-center space-x-4">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageUpload(file);
-              }}
-              className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {isUploading && <span>Uploading...</span>}
-          </div>
+//         case 'image':
+//           return (
+//             <div className="relative w-full space-y-4">
+//               {/* <div className="flex items-center space-x-4">
+//                 <input
+//                   type="file"
+//                   accept="image/*"
+//                   onChange={(e) => {
+//                     const file = e.target.files?.[0];
+//                     if (file) handleImageUpload(file);
+//                   }}
+//                   className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+//                 />
+//                 {isUploading && <span>Uploading...</span>}
+//               </div> */}
 
-          {previewUrl && (
-            <div className="relative w-full h-64">
-              <Image
-                src={previewUrl}
-                alt="Content image"
-                layout="fill"
-                objectFit="contain"
-                className="rounded-lg"
-              />
-            </div>
-          )}
-        </div>
-      );
+//               {block.content && (
+//                 <div className="relative w-full h-64">
+//                   <Image
+//                     src={block.content}
+//                     alt="Content image"
+//                     layout="fill"
+//                     objectFit="contain"
+//                     className="rounded-lg"
+//                   />
+//                 </div>
+//               )}
+//             </div>
+//           );
 
-        default:
-          return null;
-      }
-    } catch (error) {
-      console.error('Error rendering block:', error);
-      return null;
-    }
-  };
+//         default:
+//           return null;
+//       }
+//     } catch (error) {
+//       console.error('Error rendering block:', error);
+//       return null;
+//     }
+//   };
 
-  try {
-    let blocks;
-    if (typeof content === 'string') {
-      blocks = JSON.parse(content);
-    } else if (Array.isArray(content)) {
-      blocks = content;
-    } else {
-      throw new Error('Invalid content format');
-    }
+//   try {
+//     let blocks;
+//     if (typeof content === 'string') {
+//       blocks = JSON.parse(content);
+//     } else if (Array.isArray(content)) {
+//       blocks = content;
+//     } else {
+//       throw new Error('Invalid content format');
+//     }
 
-    return (
-      <div className={`space-y-6 ${className}`}>
-        {blocks.map((block, index) => (
-          <div key={block.id || index}>{renderBlock(block)}</div>
-        ))}
-      </div>
-    );
-  } catch (error) {
-    console.error('Error parsing content:', error);
-    return (
-      <div className={className}>
-        <div className="prose max-w-none">{String(content)}</div>
-      </div>
-    );
-  }
-};
+//     return (
+//       <div className={`space-y-6 ${className}`}>
+//         {blocks.map((block, index) => (
+//           <div key={block.id || index}>{renderBlock(block)}</div>
+//         ))}
+//       </div>
+//     );
+//   } catch (error) {
+//     console.error('Error parsing content:', error);
+//     return (
+//       <div className={className}>
+//         <div className="prose max-w-none">{String(content)}</div>
+//       </div>
+//     );
+//   }
+// };
 
 const api = axios.create({
-  baseURL: 'https://zine-backend.ip-ddns.com',
+  baseURL: 'https://zine-test-backend.ip-ddns.com',
   headers: {
     'Content-Type': 'application/json',
-    'stage': 'prod'
+    'stage': 'test'
   }
 });
 api.interceptors.request.use((config) => {
@@ -403,7 +406,7 @@ const LanguageSelector: React.FC<{
   onChange: (value: string) => void;
 }> = ({ value, onChange }) => {
   const languages = ['javascript', 'python', 'typescript', 'html', 'css', 'java', 'c++', 'ruby', 'php'];
-  
+
   return (
     <select
       value={value}
@@ -425,7 +428,7 @@ const BlockComponent: React.FC<{
   imageCount: number;
 }> = ({ block, onChange, onDelete, blogName, imageCount }) => {
   const [isUploading, setIsUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState(block.imageUrl || '');
+  const [previewUrl, setPreviewUrl] = useState('');
 
   const handleImageUpload = async (file: File) => {
     if (!file) return;
@@ -434,7 +437,7 @@ const BlockComponent: React.FC<{
     try {
       const imageDescription = `contentimg:${blogName}_${imageCount}`;
       const response = await uploadFile(file, imageDescription);
-      
+
       if (response.url) {
         setPreviewUrl(response.url);
         onChange(response.url);
@@ -551,11 +554,11 @@ const CreateNewBlog: React.FC<IBlogData> = ({
   content = [],
   existingBlogId = '',
   url = '',
-  parentBlog = null
+  // parentBlog = null
 }) => {
   const router = useRouter();
-  const { parentId, blogId , edit} = router.query;
-  
+  const { parentId, blogId, edit } = router.query;
+
   const [isDragging, setIsDragging] = useState(false);
   const [draggedBlock, setDraggedBlock] = useState<number | null>(null);
   const [isAddingBlock, setIsAddingBlock] = useState(false);
@@ -566,9 +569,9 @@ const CreateNewBlog: React.FC<IBlogData> = ({
   const [previewMode, setPreviewMode] = useState(false);
   const [fileState, setFileState] = useState<FileState | null>(null);
   const [imageCounter, setImageCounter] = useState(0);
-  const[isUploading, setIsUploading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   // const[PreviewUrl,setPreviewUrl]= useState('')
-  
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -584,7 +587,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     if (file) {
       setFileState({
         file: file,
-        content: "contentimg:"+formData.blogName,
+        content: "contentimg:" + formData.blogName,
         status: 'idle',
       });
     }
@@ -604,9 +607,9 @@ const CreateNewBlog: React.FC<IBlogData> = ({
       setIsUploading(true);
       try {
         // console.log(fileState.file, fileState.description);
-        let res = null
-        if(fileState.file)
-          res = await uploadFile(fileState.file, ((fileState.description)?fileState.description:''));
+        let res:any = null
+        if (fileState.file)
+          res = await uploadFile(fileState.file, ((fileState.description) ? fileState.description : ''));
         setFormData(prev => ({ ...prev, dpURL: res.url }));
         // console.log(formData)
 
@@ -623,35 +626,36 @@ const CreateNewBlog: React.FC<IBlogData> = ({
       } finally {
         setIsUploading(false);
       }
-    } 
-    
+    }
+
     else if (fileState && fileState.status === 'uploaded') {
       alert('No file to upload or already uploaded.');
     }
   };
-  const uploadimgcontent= async ()=>{
-    if (fileState && fileState.content) {
-      setIsUploading(true);
-      try {
-        let res=null
-        if(fileState.content)
-          res = await uploadFile(fileState.file, ((fileState.content)?fileState.content:''));
-        // setFormData(prev => ({ ...prev, imagePath: res.url }));
-        // console.log(res);
-        setFileState({
-          ...fileState,
-          publicId: res.publicId,
-          url: res.url,
-          status: 'uploaded',
-        });
-      } catch (error) {
-        setFileState({ ...fileState, status: 'failed' });
-        alert('Failed to upload file.');
-      } finally {
-        setIsUploading(false);
-      }
-    }
-  }
+  // const uploadimgcontent = async () => {
+  //   if (fileState && fileState.content) {
+  //     setIsUploading(true);
+  //     try {
+  //       let res = null
+  //       if (fileState.content)
+  //         res = await uploadFile(fileState.file
+  //       , ((fileState.content) ? fileState.content : ''));
+  //       // setFormData(prev => ({ ...prev, imagePath: res.url }));
+  //       // console.log(res);
+  //       setFileState({
+  //         ...fileState,
+  //         publicId: res.publicId,
+  //         url: res.url,
+  //         status: 'uploaded',
+  //       });
+  //     } catch (error) {
+  //       setFileState({ ...fileState, status: 'failed' });
+  //       alert('Failed to upload file.');
+  //     } finally {
+  //       setIsUploading(false);
+  //     }
+  //   }
+  // }
 
   const removeFile = async () => {
     if (fileState && fileState.publicId) {
@@ -669,8 +673,8 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     }
   };
   const handledelete = async () => {
-    if (fileState?.url){
-      try{
+    if (fileState?.url) {
+      try {
         console.log(fileState.url)
         await removeFile();
         setFileState(null);
@@ -681,18 +685,18 @@ const CreateNewBlog: React.FC<IBlogData> = ({
       } finally {
         setIsUploading(false);
       }
-      }
     }
-  
+  }
 
-    const [formData, setFormData] = useState<BlogFormData>({
-      blogName: title,
-      blogDescription: description,
-      content: '',
-      dpURL: url,
-      parentBlog: parentId ? Number(parentId) : null
-    });
-  
+
+  const [formData, setFormData] = useState<BlogFormData>({
+    blogName: title,
+    blogDescription: description,
+    content: '',
+    dpURL: url,
+    parentBlog: parentId ? Number(parentId) : null
+  });
+
   // const parent = use
   const {
     blocks,
@@ -708,8 +712,8 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     order: 0
   }]);
 
-  
- 
+
+
   useEffect(() => {
     const fetchBlogData = async () => {
       if (edit === 'true') {
@@ -718,7 +722,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
           const response = await api.get(`/blog`, {
             params: { id: queryId }
           });
-          
+
           let targetBlog;
           if (parentId) {
             targetBlog = response.data.blogs.find(
@@ -729,7 +733,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
               (blog: any) => blog.blogID === Number(blogId)
             );
           }
-  
+
           if (targetBlog) {
             try {
               let parsedContent = [];
@@ -743,7 +747,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                   order: 0
                 }];
               }
-  
+
               const formattedBlocks = parsedContent.map((block: any, index: number) => ({
                 id: block.id || generateId(),
                 type: block.type || 'text',
@@ -752,7 +756,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                 language: block.language,
                 listType: block.listType
               }));
-  
+
               setBlocks(formattedBlocks);
               setFormData({
                 blogID: Number(blogId),
@@ -762,7 +766,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                 dpURL: targetBlog.dpURL,
                 parentBlog: parentId ? Number(parentId) : null
               });
-              
+
               setIsEditMode(true);
             } catch (error) {
               console.error('Error processing blog content:', error);
@@ -775,7 +779,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
         }
       }
     };
-  
+
     fetchBlogData();
   }, [edit, parentId, blogId]);
   useEffect(() => {
@@ -789,9 +793,9 @@ const CreateNewBlog: React.FC<IBlogData> = ({
         language: block.type === 'code' ? block.language : undefined,
         listType: block.type === 'list' ? block.listType : undefined
       }));
-  
+
       const contentString = JSON.stringify(formattedBlocks);
-      
+
       setFormData(prev => ({
         ...prev,
         content: contentString
@@ -823,95 +827,164 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     setIsDragging(false);
     setDraggedBlock(null);
   };
-  
+
   const saveBlog = async (blogData: BlogFormData) => {
     try {
-      // Ensure content is properly stringified
-      const content = typeof blogData.content === 'string' 
-        ? blogData.content 
-        : JSON.stringify(blocks);
-  
-      // Construct the payload with all required fields
+      // Validate required fields
+      if (!blogData.blogName || !blogData.blogDescription) {
+        throw new Error('Blog title and description are required');
+      }
+
+      // Ensure content is valid JSON string
+      let contentString = '';
+      try {
+        if (typeof blogData.content === 'string') {
+          // Verify it's valid JSON by parsing and stringifying
+          JSON.parse(blogData.content);
+          contentString = blogData.content;
+        } else if (Array.isArray(blogData.content)) {
+          contentString = JSON.stringify(blogData.content);
+        } else {
+          throw new Error('Invalid content format');
+        }
+      } catch (e) {
+        throw new Error('Invalid blog content structure');
+      }
+
+      // Construct payload with explicit type conversion
       const payload = {
-        blogName: blogData.blogName,
-        blogDescription: blogData.blogDescription,
-        content: content,
+        blogName: blogData.blogName.trim(),
+        blogDescription: blogData.blogDescription.trim(),
+        content: contentString,
         dpURL: blogData.dpURL || '',
-        parentBlog: blogData.parentBlog ? Number(blogData.parentBlog) : null
+        parentBlog: blogData.parentBlog ? Number(blogData.parentBlog) : null,
+        // imagePath: blogData.imagePath || '' // Include imagePath if it exists
       };
-  
-      console.log('Sending payload:', payload);
-  
-      const response = await api.post('/blog', payload);
-  
-      if (response.status === 200 || response.status === 201) {
+
+      // Log payload for debugging
+      console.log('Sending blog payload:', payload);
+
+      const response = await api.post('/blog', payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'stage': 'test'
+        }
+      });
+
+      if (response.data && (response.status === 200 || response.status === 201)) {
         toast.success('Blog created successfully');
         router.push('/admin/blogsadmin');
         return { success: true, data: response.data };
       } else {
-        throw new Error('Unexpected response status: ' + response.status);
+        throw new Error(`Server responded with status: ${response.status}`);
       }
     } catch (error: any) {
-      console.error('Save error details:', error.response || error);
+      console.error('Blog save error:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to save blog';
       toast.error(errorMessage);
       throw new Error(errorMessage);
     }
   };
+
   const updateBlog = async (blogData: BlogFormData) => {
     try {
-      if (!blogId) {
+      if (!blogData.blogID) {
         throw new Error('Blog ID is required for update');
       }
-  
+
+      // Validate required fields
+      if (!blogData.blogName || !blogData.blogDescription) {
+        throw new Error('Blog title and description are required');
+      }
+
+      // Ensure content is valid JSON string
+      let contentString = '';
+      try {
+        if (typeof blogData.content === 'string') {
+          // Verify it's valid JSON by parsing and stringifying
+          JSON.parse(blogData.content);
+          contentString = blogData.content;
+        } else if (Array.isArray(blogData.content)) {
+          contentString = JSON.stringify(blogData.content);
+        } else {
+          throw new Error('Invalid content format');
+        }
+      } catch (e) {
+        throw new Error('Invalid blog content structure');
+      }
+
       const updatePayload = {
-        blogID: Number(blogId),
-        blogName: blogData.blogName,
-        blogDescription: blogData.blogDescription,
-        content: JSON.stringify(blocks),
-        dpURL: blogData.dpURL,
-        parentBlog: Number(parentId)
+        blogID: Number(blogData.blogID),
+        blogName: blogData.blogName.trim(),
+        blogDescription: blogData.blogDescription.trim(),
+        content: contentString,
+        dpURL: blogData.dpURL || '',
+        parentBlog: blogData.parentBlog ? Number(blogData.parentBlog) : null,
+        // imagePath: blogData.imagePath || '' // Include imagePath if it exists
       };
-  
-      const response = await api.put(`/blog/${blogId}`, updatePayload);
-      if (response.status === 200) {
+
+      // Log payload for debugging
+      console.log('Sending update payload:', updatePayload);
+
+      const response = await api.put(`/blog/${blogData.blogID}`, updatePayload, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data && response.status === 200) {
         toast.success('Blog updated successfully');
         router.push('/admin/blogsadmin');
+        return { success: true, data: response.data };
+      } else {
+        throw new Error(`Server responded with status: ${response.status}`);
       }
-      return { success: true, data: response.data };
     } catch (error: any) {
-      console.error('Update error:', error);
-      toast.error(error.response?.data?.message || 'Failed to update blog');
-      throw error;
+      console.error('Blog update error:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update blog';
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
     }
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.blogName.trim()) {
-      toast.error('Blog title is required');
-      return;
-    }
-  
-    setIsSubmitting(true);
-    
+
     try {
-      const contentStr = JSON.stringify(blocks);
-      
-      const blogData = {
-        blogName: formData.blogName,
-        blogDescription: formData.blogDescription,
+      // Validate form data
+      if (!formData.blogName.trim()) {
+        toast.error('Blog title is required');
+        return;
+      }
+
+      if (!formData.blogDescription.trim()) {
+        toast.error('Blog description is required');
+        return;
+      }
+
+      setIsSubmitting(true);
+
+      // Ensure blocks are properly formatted and stringified
+      const contentStr = JSON.stringify(blocks.map(block => ({
+        ...block,
+        content: block.content.trim() // Trim content to remove any extra whitespace
+      })));
+
+      const blogData: BlogFormData = {
+        blogName: formData.blogName.trim(),
+        blogDescription: formData.blogDescription.trim(),
         content: contentStr,
         dpURL: formData.dpURL || '',
-        parentBlog: parentId ? Number(parentId) : null
+        parentBlog: parentId ? Number(parentId) : null,
+        // imagePath: formData.imagePath || '' // Include imagePath if it exists
       };
-  
+
       if (isEditMode && blogId) {
         await updateBlog({ ...blogData, blogID: Number(blogId) });
       } else {
         await saveBlog(blogData);
       }
+
     } catch (error: any) {
       console.error('Submit error:', error);
       toast.error(error.message || 'Failed to save blog. Please try again.');
@@ -919,14 +992,14 @@ const CreateNewBlog: React.FC<IBlogData> = ({
       setIsSubmitting(false);
     }
   };
-  
+
   const handleBlockChange = useCallback((index: number, content: string, language?: string) => {
     const block = blocks[index];
     // console.log(block);
-    
+
     if (block.type === 'code' && language) {
       updateBlock(index, { content, language });
-    } 
+    }
     else if (block.type === 'image') {
       updateBlock(index, { content });
     }
@@ -945,33 +1018,33 @@ const CreateNewBlog: React.FC<IBlogData> = ({
   }, [blocks, updateBlock]);
   const handleBlockChangee = useCallback((index: number, content: string, language?: string) => {
     const block = blocks[index];
-    
+
     if (block.type === 'image') {
       // Update block content
       updateBlock(index, { content });
-      
+
       // Update formData with new content string
       setFormData(prev => {
-        const updatedBlocks = blocks.map((b, i) => 
+        const updatedBlocks = blocks.map((b, i) =>
           i === index ? { ...b, content } : b
         );
-        
+
         return {
           ...prev,
           content: JSON.stringify(updatedBlocks)
         };
       });
-      
+
       setImageCounter(prev => prev + 1);
     } else if (block.type === 'code' && language) {
       // Handle code blocks with language
       updateBlock(index, { content, language });
-      
+
       setFormData(prev => {
-        const updatedBlocks = blocks.map((b, i) => 
+        const updatedBlocks = blocks.map((b, i) =>
           i === index ? { ...b, content, language } : b
         );
-        
+
         return {
           ...prev,
           content: JSON.stringify(updatedBlocks)
@@ -980,12 +1053,12 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     } else {
       // Handle all other block types
       updateBlock(index, { content });
-      
+
       setFormData(prev => {
-        const updatedBlocks = blocks.map((b, i) => 
+        const updatedBlocks = blocks.map((b, i) =>
           i === index ? { ...b, content } : b
         );
-        
+
         return {
           ...prev,
           content: JSON.stringify(updatedBlocks)
@@ -996,14 +1069,14 @@ const CreateNewBlog: React.FC<IBlogData> = ({
 
   // const handleImageUpload = async (file: File) => {
   //   if (!file) return;
-  
+
   //   setIsUploading(true);
   //   try {
   //     // Create unique description for each content image
   //     const imageDescription = `contentimg:${formData.blogName}_${imageCounter}`;
   //     const response = await uploadFile(file, imageDescription);
   //     console.log(response)
-      
+
   //     if (response.url) {
   //       setPreviewUrl(response.url);
   //       onChange(response.url); // Update block content with image URL
@@ -1021,7 +1094,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
     setPreviewMode(!previewMode);
   };
 
-  
+
   return (
     <ProtectedRoute>
       <ToastContainer
@@ -1078,22 +1151,22 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                   >
                     Upload Image
                   </button>
-                  <button 
-                  type="button"
-                  onClick={handledelete}>
+                  <button
+                    type="button"
+                    onClick={handledelete}>
                     Delete Image
                   </button>
                 </div>
 
                 {formData.dpURL && (
                   <div className="relative w-full h-96"> {/* Added fixed height to parent */}
-                  <Image
-                    src={formData.dpURL}
-                    alt="Featured image preview"
-                    layout="fill"
-                    objectFit="contain"
-                    className="rounded-lg"
-                  />
+                    <Image
+                      src={formData.dpURL}
+                      alt="Featured image preview"
+                      layout="fill"
+                      objectFit="contain"
+                      className="rounded-lg"
+                    />
                   </div>
                 )}
               </div>
@@ -1111,31 +1184,18 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                   type="button"
                   onClick={togglePreviewMode}
                   className="flex items-center gap-2"
-                  variant="outline"
+                  
                 >
-                  {previewMode ? (
+                  { (
                     <>
                       <Edit2 className="w-4 h-4" />
                       Edit Mode
                     </>
-                  ) : (
-                    <>
-                      <Eye className="w-4 h-4" />
-                      Preview Mode
-                    </>
-                  )}
+                  ) }
                 </button>
               </div>
 
-              {previewMode ? (
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                  <h1 className="text-3xl font-bold mb-4">{formData.blogName}</h1>
-                  {formData.blogDescription && (
-                    <p className="text-gray-600 mb-6">{formData.blogDescription}</p>
-                  )}
-                  <ContentRenderer content={blocks} />
-                </div>
-              ) : (
+              { (
                 <div className="space-y-4">
                   {blocks.map((block, index) => (
                     <div
@@ -1145,24 +1205,23 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                       onDragEnd={handleDragEnd}
                       onDrop={(e) => handleDrop(e, index)}
                       onDragOver={handleDragOver}
-                      className={`group relative flex items-start gap-2 p-2 rounded-lg bg-white ${
-                        isDragging ? 'border-2 border-dashed border-gray-300' : ''
-                      }`}
+                      className={`group relative flex items-start gap-2 p-2 rounded-lg bg-white ${isDragging ? 'border-2 border-dashed border-gray-300' : ''
+                        }`}
                     >
                       <div className="opacity-0 group-hover:opacity-100 cursor-move">
                         <GripVertical className="w-6 h-6 text-gray-400" />
                       </div>
-    
+
                       <div className="flex-grow">
-                      <BlockComponent
-                            block={block}
-                            onChange={(content, language) => handleBlockChangee(index, content, language)}
-                            onDelete={() => removeBlock(index)}
-                            blogName={formData.blogName}
-                            imageCount={imageCounter}
-                          />
+                        <BlockComponent
+                          block={block}
+                          onChange={(content, language) => handleBlockChangee(index, content, language)}
+                          onDelete={() => removeBlock(index)}
+                          blogName={formData.blogName}
+                          imageCount={imageCounter}
+                        />
                       </div>
-    
+
                       <div className="opacity-0 group-hover:opacity-100 flex gap-2">
                         <button
                           type="button"
@@ -1182,9 +1241,9 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                           <X className="w-4 h-4 text-gray-400" />
                         </button>
                       </div>
-    
+
                       {isAddingBlock && addBlockIndex === index && (
-                        <BlockMenu 
+                        <BlockMenu
                           onSelect={(type, options) => {
                             addBlock(type, index, options);
                             setIsAddingBlock(false);
@@ -1200,7 +1259,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                   ))}
                 </div>
               )}
-  
+
               {!previewMode && (
                 <div className="mt-4">
                   <button
@@ -1216,7 +1275,7 @@ const CreateNewBlog: React.FC<IBlogData> = ({
                   </button>
                 </div>
               )}
-  
+
               <div className="flex justify-between items-center mt-8">
                 <button
                   type="button"

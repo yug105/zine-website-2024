@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { Clock, Loader, Plus,Edit,Trash2 } from 'lucide-react';
+import { Clock, Loader, Plus, Edit, Trash2 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import axios from 'axios';
 import { useParams } from 'react-router-dom'
@@ -18,12 +18,12 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  });
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 interface Blog {
   blogID: number;
@@ -126,9 +126,8 @@ const renderBlock = (block: any) => {
         const ListComponent = block.listType === 'bullet' ? 'ul' : 'ol';
         return (
           <ListComponent
-            className={`ml-6 space-y-2 ${
-              block.listType === 'bullet' ? 'list-disc' : 'list-decimal'
-            }`}
+            className={`ml-6 space-y-2 ${block.listType === 'bullet' ? 'list-disc' : 'list-decimal'
+              }`}
           >
             {listItems.map((item: string, index: number) => (
               <li
@@ -150,7 +149,7 @@ const renderBlock = (block: any) => {
               height={300}
               src={block.content}
               alt="Blog content"
-              fill
+
               className="object-contain rounded-lg"
               priority
               unoptimized
@@ -173,7 +172,7 @@ const renderBlock = (block: any) => {
 };
 
 const SubBlogCard = ({ blog, onClick }: { blog: Blog; onClick: () => void }) => (
-  <div 
+  <div
     onClick={onClick}
     className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-500 transition-colors cursor-pointer"
   >
@@ -183,7 +182,7 @@ const SubBlogCard = ({ blog, onClick }: { blog: Blog; onClick: () => void }) => 
           <Image
             src={blog.dpURL}
             alt={blog.blogName || 'Sub-blog cover'}
-            fill
+
             width={300}
             height={300}
             className="object-cover rounded-lg"
@@ -228,134 +227,134 @@ export const BlogDetail = () => {
   });
 
   // console.log(useParams())
-  
+
   const { id: blogId, parentId } = router.query;
   console.log(blogId, parentId);
   const handleCreateSubBlog = () => {
     router.push({
       pathname: '/admin/createblogs',
-      query: { 
+      query: {
         parentId: blogId
       }
     });
   };
-const api = axios.create({
-  baseURL: 'https://zine-backend.ip-ddns.com',
-  headers: {
-    'Content-Type': 'application/json',
-    'stage': 'prod'
-  }
-});
+  const api = axios.create({
+    baseURL: 'https://zine-backend.ip-ddns.com',
+    headers: {
+      'Content-Type': 'application/json',
+      'stage': 'prod'
+    }
+  });
 
-// Request interceptor for adding auth token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+  // Request interceptor for adding auth token
+  api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
 
-useEffect(() => {
-  const fetchBlogData = async () => {
-    if (!blogId) return;
-    
-    try {
-      setIsLoading(true);
-      setError(null);
+  useEffect(() => {
+    const fetchBlogData = async () => {
+      if (!blogId) return;
 
-      // If we have a parentId, fetch subblogs from the parent first
-      if (parentId) {
-        const parentSubBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
-          params: { id: parentId }
-        });
+      try {
+        setIsLoading(true);
+        setError(null);
 
-        // Find our current blog in the parent's subblogs
-        const currentBlog = parentSubBlogsResponse.data.blogs.find(
-          blog => blog.blogID.toString() === blogId.toString()
-        );
-
-        if (currentBlog) {
-          setMainBlog(currentBlog);
-          // Fetch subblogs of the current blog
-          const subBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
-            params: { id: blogId }
-          });
-          setSubBlogs(subBlogsResponse.data.blogs);
-        } else {
-          throw new Error('Blog not found in parent\'s subblogs');
-        }
-      } else {
-        // If no parentId, follow original logic
-        const subBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
-          params: { id: blogId }
-        });
-
-        if (subBlogsResponse.data.blogs) {
-          const allBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
-            params: { id: -1 }
+        // If we have a parentId, fetch subblogs from the parent first
+        if (parentId) {
+          const parentSubBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
+            params: { id: parentId }
           });
 
-          let currentBlog = allBlogsResponse.data.blogs.find(
+          // Find our current blog in the parent's subblogs
+          const currentBlog = parentSubBlogsResponse.data.blogs.find(
             blog => blog.blogID.toString() === blogId.toString()
           );
 
-          if (!currentBlog) {
-            for (const parentBlog of allBlogsResponse.data.blogs) {
-              const parentSubBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
-                params: { id: parentBlog.blogID }
-              });
-
-              currentBlog = parentSubBlogsResponse.data.blogs.find(
-                blog => blog.blogID.toString() === blogId.toString()
-              );
-
-              if (currentBlog) break;
-            }
-          }
-
           if (currentBlog) {
             setMainBlog(currentBlog);
+            // Fetch subblogs of the current blog
+            const subBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
+              params: { id: blogId }
+            });
             setSubBlogs(subBlogsResponse.data.blogs);
+          } else {
+            throw new Error('Blog not found in parent\'s subblogs');
+          }
+        } else {
+          // If no parentId, follow original logic
+          const subBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
+            params: { id: blogId }
+          });
+
+          if (subBlogsResponse.data.blogs) {
+            const allBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
+              params: { id: -1 }
+            });
+
+            let currentBlog = allBlogsResponse.data.blogs.find(
+              blog => blog.blogID.toString() === blogId.toString()
+            );
+
+            if (!currentBlog) {
+              for (const parentBlog of allBlogsResponse.data.blogs) {
+                const parentSubBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
+                  params: { id: parentBlog.blogID }
+                });
+
+                currentBlog = parentSubBlogsResponse.data.blogs.find(
+                  blog => blog.blogID.toString() === blogId.toString()
+                );
+
+                if (currentBlog) break;
+              }
+            }
+
+            if (currentBlog) {
+              setMainBlog(currentBlog);
+              setSubBlogs(subBlogsResponse.data.blogs);
+            } else {
+              throw new Error('Blog not found');
+            }
           } else {
             throw new Error('Blog not found');
           }
-        } else {
-          throw new Error('Blog not found');
         }
+      } catch (error) {
+        console.error('Error fetching blog:', error);
+        if (axios.isAxiosError(error)) {
+          setError(error.response?.data?.message || 'Failed to fetch blog data');
+        } else {
+          setError('Failed to fetch blog data');
+        }
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error fetching blog:', error);
-      if (axios.isAxiosError(error)) {
-        setError(error.response?.data?.message || 'Failed to fetch blog data');
-      } else {
-        setError('Failed to fetch blog data');
+    };
+
+    fetchBlogData();
+  }, [blogId, parentId]);
+
+  const handleSubBlogClick = (subBlog: Blog) => {
+    router.push({
+      pathname: `/admin/adminblogs/${subBlog.blogID}`,
+      // pathname: `/blogs/${subBlog.blogID}`,
+      query: {
+        parentId: blogId,
       }
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
-  fetchBlogData();
-}, [blogId, parentId]);
-
-const handleSubBlogClick = (subBlog: Blog) => {
-  router.push({
-     pathname: `/admin/adminblogs/${subBlog.blogID}`,
-    // pathname: `/blogs/${subBlog.blogID}`,
-    query: {
-      parentId: blogId,
-    }
-  });
-};
-
-if (isLoading) {
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <Loader className="w-8 h-8 animate-spin text-gray-500" />
-    </div>
-  );
-}
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader className="w-8 h-8 animate-spin text-gray-500" />
+      </div>
+    );
+  }
 
 
   if (error) {
@@ -477,7 +476,7 @@ if (isLoading) {
 
 
   return (
-<div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-6">
       <article className="mb-8">
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           <div className="flex justify-end p-4 space-x-2">
@@ -512,27 +511,27 @@ if (isLoading) {
                 <label className="block text-sm font-medium text-gray-700">Description</label>
                 <textarea
                   value={editForm.blogDescription}
-                  
+
                   onChange={(e) => setEditForm({ ...editForm, blogDescription: e.target.value })}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 />
               </div>
               <div>
-        <label className="block text-sm font-medium text-gray-700">Content</label>
-        <textarea
-          value={parsedContent}
-          onChange={handleContentChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-          rows={10}
-          placeholder="Enter your content here..."
-        />
-        <div className="mt-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Preview</h3>
-          <div className="p-4 border rounded-md bg-gray-50">
-            <ContentRenderer content={editForm.content} />
-          </div>
-        </div>
-      </div>
+                <label className="block text-sm font-medium text-gray-700">Content</label>
+                <textarea
+                  value={parsedContent}
+                  onChange={handleContentChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  rows={10}
+                  placeholder="Enter your content here..."
+                />
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Preview</h3>
+                  <div className="p-4 border rounded-md bg-gray-50">
+                    <ContentRenderer content={editForm.content} />
+                  </div>
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Image URL</label>
                 <input
@@ -628,7 +627,7 @@ if (isLoading) {
     </div>
   );
 };
-        
-        
+
+
 
 export default BlogDetail;

@@ -20,10 +20,10 @@ interface Blog {
 
 // Create axios instance
 const api = axios.create({
-  baseURL: 'https://zine-backend.ip-ddns.com',
+  baseURL: 'https://zine-test-backend.ip-ddns.com',
   headers: {
     'Content-Type': 'application/json',
-    'stage': 'prod'
+    'stage': 'test'
   }
 });
 
@@ -81,9 +81,8 @@ const renderBlock = (block: any) => {
         const ListComponent = block.listType === 'bullet' ? 'ul' : 'ol';
         return (
           <ListComponent
-            className={`ml-6 space-y-2 ${
-              block.listType === 'bullet' ? 'list-disc' : 'list-decimal'
-            }`}
+            className={`ml-6 space-y-2 ${block.listType === 'bullet' ? 'list-disc' : 'list-decimal'
+              }`}
           >
             {listItems.map((item: string, index: number) => (
               <li
@@ -122,7 +121,7 @@ const renderBlock = (block: any) => {
 };
 
 const SubBlogCard = ({ blog, onClick }: { blog: Blog; onClick: () => void }) => (
-  <div 
+  <div
     onClick={onClick}
     className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 cursor-pointer"
   >
@@ -183,22 +182,22 @@ export const UserBlogDetail = () => {
   useEffect(() => {
     const fetchBlogData = async () => {
       if (!blogId) return;
-      
+
       try {
         setIsLoading(true);
         setError(null);
-  
+
         // If we have a parentId, fetch subblogs from the parent first
         if (parentId) {
           const parentSubBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
             params: { id: parentId }
           });
-  
+
           // Find our current blog in the parent's subblogs
           const currentBlog = parentSubBlogsResponse.data.blogs.find(
             blog => blog.blogID.toString() === blogId.toString()
           );
-  
+
           if (currentBlog) {
             setMainBlog(currentBlog);
             // Fetch subblogs of the current blog
@@ -214,30 +213,30 @@ export const UserBlogDetail = () => {
           const subBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
             params: { id: blogId }
           });
-  
+
           if (subBlogsResponse.data.blogs) {
             const allBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
               params: { id: -1 }
             });
-  
+
             let currentBlog = allBlogsResponse.data.blogs.find(
               blog => blog.blogID.toString() === blogId.toString()
             );
-  
+
             if (!currentBlog) {
               for (const parentBlog of allBlogsResponse.data.blogs) {
                 const parentSubBlogsResponse = await api.get<{ blogs: Blog[] }>('/blog', {
                   params: { id: parentBlog.blogID }
                 });
-  
+
                 currentBlog = parentSubBlogsResponse.data.blogs.find(
                   blog => blog.blogID.toString() === blogId.toString()
                 );
-  
+
                 if (currentBlog) break;
               }
             }
-  
+
             if (currentBlog) {
               setMainBlog(currentBlog);
               setSubBlogs(subBlogsResponse.data.blogs);
@@ -259,7 +258,7 @@ export const UserBlogDetail = () => {
         setIsLoading(false);
       }
     };
-  
+
     fetchBlogData();
   }, [blogId, parentId]);
 
@@ -313,7 +312,7 @@ export const UserBlogDetail = () => {
               />
             </div>
           )}
-          
+
           <div className="p-6 space-y-6">
             <header className="text-center space-y-4">
               <h1 className="text-3xl font-bold text-gray-900">
@@ -327,7 +326,7 @@ export const UserBlogDetail = () => {
                 {new Date(mainBlog.createdAt.seconds * 1000).toLocaleDateString()}
               </div>
             </header>
-            
+
             <ContentRenderer content={mainBlog.content} />
           </div>
         </div>

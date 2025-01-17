@@ -20,10 +20,10 @@ interface Blog {
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: 'https://zine-backend.ip-ddns.com',
+  baseURL: 'https://zine-test-backend.ip-ddns.com',
   headers: {
     'Content-Type': 'application/json',
-    'stage': 'prod'
+    'stage': 'test'
   }
 });
 api.interceptors.request.use((config) => {
@@ -49,7 +49,7 @@ export const BlogsDisplay = () => {
             id: -1
           }
         });
-        
+
         setBlogs(response.data.blogs || []);
         console.log(response.data.blogs);
       } catch (error) {
@@ -89,7 +89,7 @@ export const BlogsDisplay = () => {
     );
   }
 
-  
+
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -99,7 +99,7 @@ export const BlogsDisplay = () => {
             blog={blog}
             // onClick={() => router.push(`/admin/adminblogs/${blog.blogID}`)
             onClick={() => router.push(`/blogs/${blog.blogID}`)
-          }
+            }
           />
         ))}
       </div>
